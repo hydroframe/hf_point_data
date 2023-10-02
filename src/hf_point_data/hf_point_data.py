@@ -1,5 +1,11 @@
 import pandas as pd
 import sqlite3
+import os
+import datetime
+from typing import Tuple
+import requests
+import io
+import json
 import datetime as dt
 import numpy as np
 import xarray as xr
@@ -8,7 +14,7 @@ import hf_point_data.utils as utils
 
 HYDRODATA = '/hydrodata'
 DB_PATH = f'{HYDRODATA}/national_obs/point_obs.sqlite'
-
+HYDRODATA_URL = os.getenv("HYDRODATA_URL", "https://hydro-dev-aj.princeton.edu")
 
 def get_data(data_source, variable, temporal_resolution, aggregation,
              depth_level=None,
@@ -72,6 +78,27 @@ def get_data(data_source, variable, temporal_resolution, aggregation,
     metadata_df : DataFrame; optional
         Metadata about the sites present in `data_df` for the desired variable.
     """
+
+    
+    #run_remote = not os.path.exists(HYDRODATA)
+    run_remote = True
+
+    if run_remote:
+        data_df = _get_data_from_api(data_source, variable, temporal_resolution, aggregation,
+             depth_level=None,
+             date_start=None, date_end=None,
+             latitude_range=None, longitude_range=None,
+             site_ids=None, state=None, min_num_obs=1,
+             return_metadata=False, all_attributes=False)
+        
+        return data_df
+    
+    #convert string inputs to the proper
+    #types if necessary
+    #this is needed if this function is called from the api
+    #with string inputs
+    #the inputs will come in as a dictionary of strings
+    options = _convert_strings_to_json(options)
 
     # Create database connection
     conn = sqlite3.connect(DB_PATH)
@@ -179,3 +206,138 @@ def get_citation_information(data_source, site_ids=None):
 
         df = pd.read_sql_query(query, conn, params=site_ids)
         return df
+
+
+def _get_data_from_api(data_source, variable, temporal_resolution, aggregation,
+             depth_level=None,
+             date_start=None, date_end=None,
+             latitude_range=None, longitude_range=None,
+             site_ids=None, state=None, min_num_obs=1,
+             return_metadata=False, all_attributes=False):
+    
+    options = _convert_params_to_string_dict(data_source, variable, temporal_resolution, aggregation,
+             depth_level=None,
+             date_start=None, date_end=None,
+             latitude_range=None, longitude_range=None,
+             site_ids=None, state=None, min_num_obs=1,
+             return_metadata=False, all_attributes=False)
+    q_params = _construct_string_from_qparams(options)
+    #point_data_url = f"{HYDRODATA_URL}/api/point-data-app?{q_params}"
+    point_data_url = "https://hydro-dev-aj.princeton.edu/api/point-data-app?variable=streamflow&temporal_resolution=daily&aggregation=average&date_start=2020-01-01&date_end=2020-01-03&lat_min=45&lat_max=46&lon_min=-75&lon_max=-70"
+
+    try:
+        headers = _validate_user()
+        response = requests.get(point_data_url, headers=headers, timeout=180)
+        if response.status_code != 200:
+            raise ValueError(
+                f"The  {point_data_url} returned error code {response.status_code}."
+            )
+
+    except requests.exceptions.Timeout as e:
+        raise ValueError(
+            f"The point_data_url {point_data_url} has timed out."
+        ) from e
+
+    data_df = pd.read_pickle(pd.compat.io.BytesIO(response.content))
+    return data_df
+
+def _convert_params_to_string_dict(options):
+    """
+    Converts json input options to strings.
+
+    Parameters
+    ----------
+    options : dictionary
+        request options.
+    """
+    #Need to convert all inputs
+    #to a dictionary of strings here
+
+    return options
+
+
+def _convert_strings_to_json(options):
+    """
+    Converts strings to jsons.
+
+    Parameters
+    ----------
+    options : dictionary
+        request options.
+    """
+    #Update this to construct the proper
+    #type of input from a string
+    
+    return options
+
+
+def _construct_string_from_qparams(options):
+    """
+    Constructs the query parameters from the entry and options provided.
+
+    Parameters
+    ----------
+    entry : hydroframe.data_catalog.data_model_access.ModelTableRow
+        variable to be downloaded.
+    options : dictionary
+        datast to which the variable belongs.
+
+    Returns
+    -------
+    data : numpy array
+        the requested data.
+    """
+
+    string_parts = [
+        f"{name}={value}" for name, value in options.items() if value is not None
+    ]
+    result_string = "&".join(string_parts)
+    return result_string
+
+def _validate_user():
+    email, pin = get_registered_api_pin()
+    url_security = f"{HYDRODATA_URL}/api/api_pins?pin={pin}&email={email}"
+    response = requests.get(url_security, timeout=15)
+    if not response.status_code == 200:
+        raise ValueError(f"No registered PIN for email '{email}' and PIN {pin}. See documentation to register with a URL.")
+    json_string = response.content.decode("utf-8")
+    jwt_json = json.loads(json_string)
+    expires_string = jwt_json.get("expires")
+    if expires_string:
+        expires = datetime.datetime.strptime(expires_string, "%Y/%m/%d %H:%M:%S GMT-0000")
+        now = datetime.datetime.now()
+        if now > expires:
+            raise ValueError("PIN has expired. Please re-register it from https://hydrogen.princeton.edu/pin")
+    jwt_token = jwt_json["jwt_token"]
+    headers = {}
+    headers["Authorization"] = f"Bearer {jwt_token}"
+    return headers
+
+
+def get_registered_api_pin() -> Tuple[str, str]:
+    """
+    Get the email and pin registered by the current user.
+
+    Returns:
+        A tuple (email, pin)
+    Raises:
+        ValueError if no email/pin was registered
+    """
+
+    pin_dir = os.path.expanduser("~/.hydrodata")
+    pin_path = f"{pin_dir}/pin.json"
+    if not os.path.exists(pin_path):
+        raise ValueError(
+            "No email/pin was registered. Use the register_api() method to register the pin you created at the website."
+        )
+    try:
+        with open(pin_path, "r") as stream:
+            contents = stream.read()
+            parsed_contents = json.loads(contents)
+            email = parsed_contents.get("email")
+            pin = parsed_contents.get("pin")
+            return (email, pin)
+    except Exception as e:
+        raise ValueError(
+            "No email/pin was registered. Use the register_api() method to register the pin you created at the website."
+        ) from e
