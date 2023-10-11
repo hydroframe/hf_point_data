@@ -283,7 +283,7 @@ def get_metadata(site_ids):
     return metadata_df
 
 
-def get_citation_information(data_source, site_ids=None):
+def get_citations(data_source, site_ids=None):
     """
     Print and/or return specific citation information for requested data source.
 
@@ -299,7 +299,7 @@ def get_citation_information(data_source, site_ids=None):
     Returns
     -------
     None or DataFrame of site-specific DOIs
-        Nothing returned unless data_source == `ameriflux` and the parameter `site_list` is provided.
+        Nothing returned unless data_source == `ameriflux` and the parameter `site_ids` is provided.
     """
     try:
         assert data_source in ['usgs_nwis', 'usda_nrcs', 'ameriflux']
