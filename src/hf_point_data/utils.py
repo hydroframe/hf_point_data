@@ -155,6 +155,52 @@ def get_dirpath(var_id):
     return dirpath_map[var_id]
 
 
+def get_network_site_list(data_source, variable, site_networks):
+    """
+    Return list of site IDs for desired network of observation sites.
+
+    Parameters
+    ----------
+    data_source : str
+        Source from which requested data originated. Currently supported: 'usgs_nwis', 'usda_nrcs', 
+        'ameriflux'.   
+    variable : str
+        Description of type of data requested. Currently supported: 'streamflow', 'wtd', 'swe', 
+        'precipitation', 'temperature', 'soil moisture', 'latent heat flux', 'sensible heat flux', 
+        'shortwave radiation', 'longwave radiation', 'vapor pressure deficit', 'wind speed'.
+    site_networks: list
+        List of names of site networks. Can be a list with a single network name.
+        Each network must have matching .csv file with a list of site ID values that comprise
+        the network. This .csv file must be located under network_lists/{data_source}/{variable}
+        in the package directory and named as 'network_name'.csv.
+
+    Returns
+    -------
+    site_list: list
+        List of site ID strings for sites belonging to named network.
+    """
+    network_options = {'usgs_nwis': {'streamflow': ['camels', 'gagesii_reference', 'gagesii', 'hcdn2009'],
+                                     'wtd': ['climate_response_network']}}
+
+    # Initialize final site list
+    site_list = []
+
+    # Append sites from desired network(s)
+    for network in site_networks:
+        try:
+            assert network in network_options[data_source][variable]
+            df = pd.read_csv(f'network_lists/{data_source}/{variable}/{network}.csv',
+                             dtype=str, header=None, names=['site_id'])
+            site_list += list(df['site_id'])
+        except:
+            raise ValueError(
+                f'Network option {network} is not recognized. Please make sure the .csv network_lists/{data_source}/{variable}/{network}.csv exists.')
+
+    # Make sure only list of unique site IDs is returned (in case multiple, overlapping networks provided)
+    # Note: calling 'set' can change the order of the IDs, but for this workflow that does not matter
+    return list(set(site_list))
+
+
 def convert_to_pandas(ds):
     """
     Convert xarray DataSet to pandas DataFrame.

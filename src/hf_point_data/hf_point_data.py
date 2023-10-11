@@ -14,7 +14,7 @@ def get_sites(data_source, variable, temporal_resolution, aggregation,
               depth_level=None,
               date_start=None, date_end=None,
               latitude_range=None, longitude_range=None,
-              site_ids=None, state=None):
+              site_ids=None, state=None, site_networks=None):
     """
     Build DataFrame with site attribute metadata information.
 
@@ -48,6 +48,11 @@ def get_sites(data_source, variable, temporal_resolution, aggregation,
         List of desired (string) site identifiers.
     state : str; default=None
         Two-letter postal code state abbreviation.
+    site_networks: list
+        List of names of site networks. Can be a list with a single network name.
+        Each network must have matching .csv file with a list of site ID values that comprise
+        the network. This .csv file must be located under network_lists/{data_source}/{variable}
+        in the package directory and named as 'network_name'.csv. Eg: `site_networks=['gagesii']`
 
     Returns
     -------
@@ -71,21 +76,21 @@ def get_sites(data_source, variable, temporal_resolution, aggregation,
     param_list = [var_id]
 
     # Date start
-    if date_start != None:
+    if date_start is not None:
         date_start_query = """ AND last_date_data_available >= ?"""
         param_list.append(date_start)
     else:
         date_start_query = """"""
 
     # Date end
-    if date_end != None:
+    if date_end is not None:
         date_end_query = """ AND first_date_data_available <= ?"""
         param_list.append(date_end)
     else:
         date_end_query = """"""
 
     # Latitude
-    if latitude_range != None:
+    if latitude_range is not None:
         lat_query = """ AND latitude BETWEEN ? AND ?"""
         param_list.append(latitude_range[0])
         param_list.append(latitude_range[1])
@@ -93,7 +98,7 @@ def get_sites(data_source, variable, temporal_resolution, aggregation,
         lat_query = """"""
 
     # Longitude
-    if longitude_range != None:
+    if longitude_range is not None:
         lon_query = """ AND longitude BETWEEN ? AND ?"""
         param_list.append(longitude_range[0])
         param_list.append(longitude_range[1])
@@ -101,7 +106,7 @@ def get_sites(data_source, variable, temporal_resolution, aggregation,
         lon_query = """"""
 
     # Site ID
-    if site_ids != None:
+    if site_ids is not None:
         site_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(site_ids))
         for s in site_ids:
             param_list.append(s)
@@ -109,11 +114,20 @@ def get_sites(data_source, variable, temporal_resolution, aggregation,
         site_query = """"""
 
     # State
-    if state != None:
+    if state is not None:
         state_query = """ AND state == ?"""
         param_list.append(state)
     else:
         state_query = """"""
+
+    # Site Networks
+    if site_networks is not None:
+        network_site_list = utils.get_network_site_list(data_source, variable, site_networks)
+        network_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(network_site_list))
+        for s in network_site_list:
+            param_list.append(s)
+    else:
+        network_query = """"""
 
     query = """
             SELECT s.site_id, s.site_name, s.site_type, s.agency, s.state,
@@ -123,7 +137,7 @@ def get_sites(data_source, variable, temporal_resolution, aggregation,
             INNER JOIN observations o
             ON s.site_id = o.site_id AND o.var_id == ?
             WHERE first_date_data_available <> 'None'
-            """ + date_start_query + date_end_query + lat_query + lon_query + site_query + state_query
+            """ + date_start_query + date_end_query + lat_query + lon_query + site_query + state_query + network_query
 
     df = pd.read_sql_query(query, conn, params=param_list)
     conn.close()
@@ -135,7 +149,7 @@ def get_data(data_source, variable, temporal_resolution, aggregation,
              depth_level=None,
              date_start=None, date_end=None,
              latitude_range=None, longitude_range=None,
-             site_ids=None, state=None, min_num_obs=1):
+             site_ids=None, state=None, site_networks=None, min_num_obs=1):
     """
     Collect observations data into a Pandas DataFrame.
 
@@ -174,6 +188,11 @@ def get_data(data_source, variable, temporal_resolution, aggregation,
         List of desired (string) site identifiers.
     state : str; default=None
         Two-letter postal code state abbreviation.
+    site_networks: list
+        List of names of site networks. Can be a list with a single network name.
+        Each network must have matching .csv file with a list of site ID values that comprise
+        the network. This .csv file must be located under network_lists/{data_source}/{variable}
+        in the package directory and named as 'network_name'.csv. Eg: `site_networks=['gagesii']`
     min_num_obs : int; default=1
         Value for the minimum number of observations desired for a site to have.
 
@@ -203,7 +222,7 @@ def get_data(data_source, variable, temporal_resolution, aggregation,
                          aggregation=aggregation, depth_level=depth_level,
                          date_start=date_start, date_end=date_end,
                          latitude_range=latitude_range, longitude_range=longitude_range,
-                         site_ids=site_ids, state=state)
+                         site_ids=site_ids, state=state, site_networks=site_networks)
 
     if len(sites_df) == 0:
         raise ValueError('There are zero sites that satisfy the given parameters.')
