@@ -11,7 +11,7 @@ import numpy as np
 import xarray as xr
 
 
-def check_inputs(data_source, variable, temporal_resolution, aggregation, depth_level, return_metadata, all_attributes):
+def check_inputs(data_source, variable, temporal_resolution, aggregation, depth_level):
     """
     Checks on inputs to get_observations function.
 
@@ -32,11 +32,6 @@ def check_inputs(data_source, variable, temporal_resolution, aggregation, depth_
         for allowable combinations with `variable`.
     depth_level : int
         Depth level in inches at which the measurement is taken. Necessary for `variable` = 'soil moisture'.
-    return_metadata : bool
-        Whether the metadata DataFrame is also returned.
-    all_attributes : bool
-        If the metadata DataFrame is returned, and indication of whether the full set of site attributes
-        is included or only a subset.
 
     Returns
     -------
@@ -53,9 +48,6 @@ def check_inputs(data_source, variable, temporal_resolution, aggregation, depth_
 
     if variable == 'soil moisture':
         assert depth_level is not None
-
-    if return_metadata == False:
-        assert all_attributes == False
 
 
 def get_var_id(conn, data_source, variable, temporal_resolution, aggregation, depth_level=None):
@@ -161,136 +153,6 @@ def get_dirpath(var_id):
                    24: '/hydrodata/national_obs/ameriflux/data/hourly'}
 
     return dirpath_map[var_id]
-
-
-def get_observations_metadata(conn, var_id, date_start=None, date_end=None,
-                              latitude_range=None, longitude_range=None,
-                              site_ids=None, state=None, all_attributes=False):
-    """
-    Build DataFrame with site attribute metadata information.
-
-    Parameters
-    ----------
-    conn : Connection object
-        The Connection object associated with the SQLite database to 
-        query from. 
-    var_id : int
-        Integer variable ID associated with combination of `data_source`, `variable`, `temporal_resolution`,
-        and `aggregation`.
-    date_start : str; default=None
-        'YYYY-MM-DD' format date indicating beginning of time range.
-    date_end : str; default=None
-        'YYYY-MM-DD' format date indicating end of time range.
-    latitude_range : tuple; default=None
-        Latitude range bounds for the geographic domain; lesser value is provided first.
-    longitude_range : tuple; default=None
-        Longitude range bounds for the geographic domain; lesser value is provided first.
-    site_ids : list; default=None
-        List of desired (string) site identifiers.
-    state : str; default=None
-        Two-letter postal code state abbreviation.
-    all_attributes : bool; default=False
-        Whether to include all available attributes on returned DataFrame.
-
-    Returns
-    -------
-    DataFrame
-        Site-level DataFrame of attribute metadata information.
-
-    Notes
-    -----
-    The returned field 'record_count' is OVERALL record count. Filtering of metadata 
-    only applies at the site level, so only sites within the provided bounds 
-    (space and time) are included. The record count does not reflect any filtering 
-    at the data/observation level.
-    """
-    if var_id in (1, 2):
-        attribute_table = 'streamgauge_attributes'
-    elif var_id in (3, 4, 5):
-        attribute_table = 'well_attributes'
-    elif var_id in range(6, 18):
-        attribute_table = 'snotel_station_attributes'
-    elif var_id in range(18, 25):
-        attribute_table = 'flux_tower_attributes'
-
-    param_list = [var_id]
-
-    # Date start
-    if date_start != None:
-        date_start_query = """ AND last_date_data_available >= ?"""
-        param_list.append(date_start)
-    else:
-        date_start_query = """"""
-
-    # Date end
-    if date_end != None:
-        date_end_query = """ AND first_date_data_available <= ?"""
-        param_list.append(date_end)
-    else:
-        date_end_query = """"""
-
-    # Latitude
-    if latitude_range != None:
-        lat_query = """ AND latitude BETWEEN ? AND ?"""
-        param_list.append(latitude_range[0])
-        param_list.append(latitude_range[1])
-    else:
-        lat_query = """"""
-
-    # Longitude
-    if longitude_range != None:
-        lon_query = """ AND longitude BETWEEN ? AND ?"""
-        param_list.append(longitude_range[0])
-        param_list.append(longitude_range[1])
-    else:
-        lon_query = """"""
-
-    # Site ID
-    if site_ids != None:
-        site_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(site_ids))
-        for s in site_ids:
-            param_list.append(s)
-    else:
-        site_query = """"""
-
-    # State
-    if state != None:
-        state_query = """ AND state == ?"""
-        param_list.append(state)
-    else:
-        state_query = """"""
-
-    query_full = """
-                SELECT * 
-                FROM
-                (SELECT *
-                    FROM sites s
-                    INNER JOIN observations o
-                    ON s.site_id = o.site_id AND o.var_id == ?
-                    WHERE first_date_data_available <> 'None' 
-                """ + date_start_query + date_end_query + lat_query + lon_query + site_query + state_query + """ GROUP BY s.site_id)
-                INNER JOIN {}
-                USING (site_id)
-                """.format(attribute_table)
-
-    query_subset = """
-                    SELECT s.site_id, s.site_name, s.site_type, s.agency, s.state, 
-                           s.latitude, s.longitude, o.var_id, o.first_date_data_available,
-                           o.last_date_data_available, o.record_count, o.file_path
-                    FROM sites s
-                    INNER JOIN observations o
-                    ON s.site_id = o.site_id AND o.var_id == ?
-                    WHERE first_date_data_available <> 'None' 
-                    """ + date_start_query + date_end_query + lat_query + lon_query + site_query + state_query
-
-    if all_attributes == True:
-        query = query_full
-    else:
-        query = query_subset
-
-    df = pd.read_sql_query(query, conn, params=param_list)
-
-    return df
 
 
 def convert_to_pandas(ds):

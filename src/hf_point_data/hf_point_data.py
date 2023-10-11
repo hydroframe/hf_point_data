@@ -10,12 +10,132 @@ HYDRODATA = '/hydrodata'
 DB_PATH = f'{HYDRODATA}/national_obs/point_obs.sqlite'
 
 
+def get_sites(data_source, variable, temporal_resolution, aggregation,
+              depth_level=None,
+              date_start=None, date_end=None,
+              latitude_range=None, longitude_range=None,
+              site_ids=None, state=None):
+    """
+    Build DataFrame with site attribute metadata information.
+
+    Parameters
+    ----------
+    data_source : str
+        Source from which requested data originated. Currently supported: 'usgs_nwis', 'usda_nrcs', 
+        'ameriflux'.   
+    variable : str
+        Description of type of data requested. Currently supported: 'streamflow', 'wtd', 'swe', 
+        'precipitation', 'temperature', 'soil moisture', 'latent heat flux', 'sensible heat flux', 
+        'shortwave radiation', 'longwave radiation', 'vapor pressure deficit', 'wind speed'.
+    temporal_resolution : str
+        Collection frequency of data requested. Currently supported: 'daily', 'hourly', and 'instantaneous'.
+        Please see the README documentation for allowable combinations with `variable`.
+    aggregation : str
+        Additional information specifying the aggregation method for the variable to be returned. 
+        Options include descriptors such as 'average' and 'total'. Please see the README documentation
+        for allowable combinations with `variable`.
+    depth_level : int
+        Depth level in inches at which the measurement is taken. Necessary for `variable` = 'soil moisture'.
+    date_start : str; default=None
+        'YYYY-MM-DD' format date indicating beginning of time range.
+    date_end : str; default=None
+        'YYYY-MM-DD' format date indicating end of time range.
+    latitude_range : tuple; default=None
+        Latitude range bounds for the geographic domain; lesser value is provided first.
+    longitude_range : tuple; default=None
+        Longitude range bounds for the geographic domain; lesser value is provided first.
+    site_ids : list; default=None
+        List of desired (string) site identifiers.
+    state : str; default=None
+        Two-letter postal code state abbreviation.
+
+    Returns
+    -------
+    DataFrame
+        Site-level DataFrame of attribute metadata information.
+
+    Notes
+    -----
+    The returned field 'record_count' is OVERALL record count. Filtering of metadata 
+    only applies at the site level, so only sites within the provided bounds 
+    (space and time) are included. The record count does not reflect any filtering 
+    at the data/observation level.
+    """
+
+    # Create database connection
+    conn = sqlite3.connect(DB_PATH)
+
+    # Get associated variable IDs for requested data types and time periods
+    var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, depth_level)
+
+    param_list = [var_id]
+
+    # Date start
+    if date_start != None:
+        date_start_query = """ AND last_date_data_available >= ?"""
+        param_list.append(date_start)
+    else:
+        date_start_query = """"""
+
+    # Date end
+    if date_end != None:
+        date_end_query = """ AND first_date_data_available <= ?"""
+        param_list.append(date_end)
+    else:
+        date_end_query = """"""
+
+    # Latitude
+    if latitude_range != None:
+        lat_query = """ AND latitude BETWEEN ? AND ?"""
+        param_list.append(latitude_range[0])
+        param_list.append(latitude_range[1])
+    else:
+        lat_query = """"""
+
+    # Longitude
+    if longitude_range != None:
+        lon_query = """ AND longitude BETWEEN ? AND ?"""
+        param_list.append(longitude_range[0])
+        param_list.append(longitude_range[1])
+    else:
+        lon_query = """"""
+
+    # Site ID
+    if site_ids != None:
+        site_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(site_ids))
+        for s in site_ids:
+            param_list.append(s)
+    else:
+        site_query = """"""
+
+    # State
+    if state != None:
+        state_query = """ AND state == ?"""
+        param_list.append(state)
+    else:
+        state_query = """"""
+
+    query = """
+            SELECT s.site_id, s.site_name, s.site_type, s.agency, s.state,
+                   s.latitude, s.longitude, o.var_id, o.first_date_data_available,
+                   o.last_date_data_available, o.record_count
+            FROM sites s
+            INNER JOIN observations o
+            ON s.site_id = o.site_id AND o.var_id == ?
+            WHERE first_date_data_available <> 'None'
+            """ + date_start_query + date_end_query + lat_query + lon_query + site_query + state_query
+
+    df = pd.read_sql_query(query, conn, params=param_list)
+    conn.close()
+
+    return df
+
+
 def get_data(data_source, variable, temporal_resolution, aggregation,
              depth_level=None,
              date_start=None, date_end=None,
              latitude_range=None, longitude_range=None,
-             site_ids=None, state=None, min_num_obs=1,
-             return_metadata=False, all_attributes=False):
+             site_ids=None, state=None, min_num_obs=1):
     """
     Collect observations data into a Pandas DataFrame.
 
@@ -56,12 +176,6 @@ def get_data(data_source, variable, temporal_resolution, aggregation,
         Two-letter postal code state abbreviation.
     min_num_obs : int; default=1
         Value for the minimum number of observations desired for a site to have.
-    return_metadata : bool; default=False
-        Whether to additionally return a DataFrame containing site metadata.
-    all_attributes : bool; default=False
-        Whether to include all available attributes on returned metadata DataFrame.
-    db_path : str
-        Full path to location of point observations database.
 
     Returns
     -------
@@ -78,22 +192,24 @@ def get_data(data_source, variable, temporal_resolution, aggregation,
 
     # Validation checks on inputs
     utils.check_inputs(data_source, variable, temporal_resolution, aggregation,
-                       depth_level, return_metadata, all_attributes)
+                       depth_level)
 
     # Get associated variable IDs for requested data types and time periods
     var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, depth_level)
 
-    # Get site metadata
-    metadata_temp = utils.get_observations_metadata(conn, var_id,
-                                                    date_start=date_start, date_end=date_end,
-                                                    latitude_range=latitude_range, longitude_range=longitude_range,
-                                                    site_ids=site_ids, state=state, all_attributes=all_attributes)
+    # Get site list
+    sites_df = get_sites(data_source=data_source, variable=variable,
+                         temporal_resolution=temporal_resolution,
+                         aggregation=aggregation, depth_level=depth_level,
+                         date_start=date_start, date_end=date_end,
+                         latitude_range=latitude_range, longitude_range=longitude_range,
+                         site_ids=site_ids, state=state)
 
-    if len(metadata_temp) == 0:
+    if len(sites_df) == 0:
         raise ValueError('There are zero sites that satisfy the given parameters.')
 
     # Get data
-    site_list = list(metadata_temp['site_id'])
+    site_list = list(sites_df['site_id'])
 
     if (var_id in (1, 2, 3, 4)) | (var_id in range(6, 25)):
         data_df = utils.get_data_nc(site_list, var_id, date_start, date_end, min_num_obs)
@@ -101,16 +217,70 @@ def get_data(data_source, variable, temporal_resolution, aggregation,
     elif var_id == 5:
         data_df = utils.get_data_sql(conn, var_id, date_start, date_end, min_num_obs)
 
-    # Return data
-    if return_metadata == True:
+    conn.close()
 
-        # Filter metadata down to only sites with actual data for the specific date range
-        # and/or minimum observation count
-        metadata_df = metadata_temp.merge(data_df['site_id'], how='right', on='site_id')
-        return (data_df.reset_index().drop('index', axis=1), metadata_df.reset_index().drop('index', axis=1))
+    return data_df.reset_index().drop('index', axis=1)
 
-    else:
-        return data_df.reset_index().drop('index', axis=1)
+
+def get_metadata(site_ids):
+    """
+    Return DataFrame with site metadata for the requested site IDs.
+
+    Parameters
+    ----------
+    site_ids : list; default=None
+        List of desired (string) site identifiers.
+
+    Returns
+    -------
+    DataFrame
+        Site-level DataFrame of site-level metadata.
+
+    Notes
+    -----
+    The returned field 'record_count' is OVERALL record count. Filtering of metadata 
+    only applies at the site level, so only sites within the provided bounds 
+    (space and time) are included. The record count does not reflect any filtering 
+    at the data/observation level.
+    """
+    # Create database connection
+    conn = sqlite3.connect(DB_PATH)
+
+    # Site ID
+    query = """
+            SELECT * 
+            FROM sites
+            WHERE site_id IN (%s)""" % ','.join('?'*len(site_ids))
+
+    metadata_df = pd.read_sql_query(query, conn, params=site_ids)
+
+    # Merge on additional metadata attribute tables as needed
+    if 'stream gauge' in metadata_df['site_type'].unique():
+        attributes_df = pd.read_sql_query(
+            """SELECT * FROM streamgauge_attributes WHERE site_id IN (%s)""" % ','.join('?' * len(site_ids)),
+            conn, params=site_ids)
+        metadata_df = pd.merge(metadata_df, attributes_df, how='left', on='site_id')
+
+    if 'groundwater well' in metadata_df['site_type'].unique():
+        attributes_df = pd.read_sql_query(
+            """SELECT * FROM well_attributes WHERE site_id IN (%s)""" % ','.join('?' * len(site_ids)),
+            conn, params=site_ids)
+        metadata_df = pd.merge(metadata_df, attributes_df, how='left', on='site_id')
+
+    if 'SNOTEL station' or 'SCAN station' in metadata_df['site_type'].unique():
+        attributes_df = pd.read_sql_query(
+            """SELECT * FROM snotel_station_attributes WHERE site_id IN (%s)""" % ','.join('?' * len(site_ids)),
+            conn, params=site_ids)
+        metadata_df = pd.merge(metadata_df, attributes_df, how='left', on='site_id')
+
+    if 'flux tower' in metadata_df['site_type'].unique():
+        attributes_df = pd.read_sql_query(
+            """SELECT * FROM flux_tower_attributes WHERE site_id IN (%s)""" % ','.join('?' * len(site_ids)),
+            conn, params=site_ids)
+        metadata_df = pd.merge(metadata_df, attributes_df, how='left', on='site_id')
+
+    conn.close()
+    return metadata_df
 
 
 def get_citation_information(data_source, site_ids=None):
