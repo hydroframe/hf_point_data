@@ -201,6 +201,36 @@ def get_network_site_list(data_source, variable, site_networks):
     return list(set(site_list))
 
 
+def clean_huc(huc):
+    """
+    Clean up and standardize HUC8 values.
+
+    Parameters
+    ----------
+    huc : str
+        Single string value representing a HUC code.
+
+    Returns
+    -------
+    cleaned_huc : str
+        HUC8 code or '' if not enough information available.
+    """
+    # Clean out HUC values that are fewer than 7 digits
+    huc_length = len(huc)
+    if huc_length < 7:
+        cleaned_huc = ''
+
+    # If 7 or 11 digits, add a leading 0
+    elif len(huc) in (7, 11):
+        huc = '0' + huc
+
+    # Truncate to HUC8 for 'least common denominator' level
+    if len(huc) >= 8:
+        cleaned_huc = huc[0:8]
+
+    return cleaned_huc
+
+
 def convert_to_pandas(ds):
     """
     Convert xarray DataSet to pandas DataFrame.

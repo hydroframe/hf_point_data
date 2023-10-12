@@ -131,7 +131,7 @@ def get_sites(data_source, variable, temporal_resolution, aggregation,
 
     query = """
             SELECT s.site_id, s.site_name, s.site_type, s.agency, s.state,
-                   s.latitude, s.longitude, o.var_id, o.first_date_data_available,
+                   s.latitude, s.longitude, s.huc, o.var_id, o.first_date_data_available,
                    o.last_date_data_available, o.record_count
             FROM sites s
             INNER JOIN observations o
@@ -140,6 +140,11 @@ def get_sites(data_source, variable, temporal_resolution, aggregation,
             """ + date_start_query + date_end_query + lat_query + lon_query + site_query + state_query + network_query
 
     df = pd.read_sql_query(query, conn, params=param_list)
+
+    # Clean up HUC to string of appropriate length
+    df['huc8'] = df['huc'].apply(lambda x: utils.clean_huc(x))
+    df.drop(columns=['huc'], inplace=True)
+
     conn.close()
 
     return df
@@ -267,11 +272,16 @@ def get_metadata(site_ids):
 
     # Site ID
     query = """
-            SELECT * 
+            SELECT site_id, site_type, agency, site_name, latitude, longitude, state, huc,
+                   site_query_url, date_metadata_last_updated, tz_cd, doi 
             FROM sites
             WHERE site_id IN (%s)""" % ','.join('?'*len(site_ids))
 
     metadata_df = pd.read_sql_query(query, conn, params=site_ids)
+
+    # Clean up HUC to string of appropriate length
+    metadata_df['huc8'] = metadata_df['huc'].apply(lambda x: utils.clean_huc(x))
+    metadata_df.drop(columns=['huc'], inplace=True)
 
     # Merge on additional metadata attribute tables as needed
     if 'stream gauge' in metadata_df['site_type'].unique():
