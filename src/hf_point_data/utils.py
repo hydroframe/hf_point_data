@@ -253,8 +253,8 @@ def convert_to_pandas(ds):
     dates = pd.Series(ds['date'].to_numpy()).astype(str)
     data = ds.to_numpy()
 
-    df = pd.DataFrame(data, columns=dates)
-    df['site_id'] = sites
+    df = pd.DataFrame(data.T, columns=sites)
+    df['date'] = dates
 
     # Reorder columns to put site_id first
     cols = df.columns.tolist()
@@ -292,6 +292,7 @@ def filter_min_num_obs(df, min_num_obs):
 
     # filter based on this field
     df_filtered = dfc[dfc['num_obs'] >= min_num_obs]
+    df_filtered.drop(columns=['num_obs'], inplace=True)
 
     return df_filtered
 
@@ -427,7 +428,7 @@ def get_data_sql(conn, var_id, date_start, date_end, min_num_obs):
         param_list = [date_start, date_end, min_num_obs, date_start, date_end]
 
     query = """
-            SELECT w.site_id, w.date, w.wtd, w.pumping_status, num_obs
+            SELECT w.site_id, w.date, w.wtd, w.pumping_status
             FROM wtd_discrete_data AS w
             INNER JOIN (SELECT w.site_id, COUNT(*) AS num_obs
                 FROM wtd_discrete_data AS w
