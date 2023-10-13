@@ -89,8 +89,7 @@ def get_data(
         Metadata about the sites present in `data_df` for the desired variable.
     """
 
-    # run_remote = not os.path.exists(HYDRODATA)
-    run_remote = True
+    run_remote = not os.path.exists(HYDRODATA)
 
     if run_remote:
         data_df = _get_data_from_api(
