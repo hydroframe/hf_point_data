@@ -1,23 +1,21 @@
-import pandas as pd
+# pylint: disable=C0301
+import json
+import io
 import sqlite3
 import os
 import datetime
 from typing import Tuple
-import requests
-import io
 import ast
-import json
-import datetime as dt
-import numpy as np
-import xarray as xr
-
+import requests
+import pandas as pd
 import hf_point_data.utils as utils
 
 HYDRODATA = "/hydrodata"
 DB_PATH = f"{HYDRODATA}/national_obs/point_obs.sqlite"
 HYDRODATA_URL = os.getenv("HYDRODATA_URL", "https://hydro-dev-aj.princeton.edu")
 
-#Need to convert these inputs to options
+
+# Need to convert these inputs to options
 def get_data(
     data_source,
     variable,
@@ -96,25 +94,40 @@ def get_data(
 
     if run_remote:
         data_df = _get_data_from_api(
-            data_source,
-            variable,
-            temporal_resolution,
-            aggregation,
-            depth_level=None,
-            date_start=None,
-            date_end=None,
-            latitude_range=None,
-            longitude_range=None,
-            site_ids=None,
-            state=None,
-            min_num_obs=1,
-            return_metadata=False,
-            all_attributes=False,
+            data_source=data_source,
+            variable=variable,
+            temporal_resolution=temporal_resolution,
+            aggregation=aggregation,
+            depth_level=depth_level,
+            date_start=date_start,
+            date_end=date_end,
+            latitude_range=latitude_range,
+            longitude_range=longitude_range,
+            site_ids=site_ids,
+            state=state,
+            min_num_obs=min_num_obs,
+            return_metadata=return_metadata,
+            all_attributes=all_attributes,
         )
 
         return data_df
 
-    options = _convert_strings_to_type(options
+    (
+        depth_level,
+        latitude_range,
+        longitude_range,
+        site_ids,
+        min_num_obs,
+        return_metadata,
+        all_attributes,
+    ) = _convert_strings_to_type(
+        depth_level,
+        latitude_range,
+        longitude_range,
+        site_ids,
+        min_num_obs,
+        return_metadata,
+        all_attributes,
     )
     # Create database connection
     conn = sqlite3.connect(DB_PATH)
@@ -253,36 +266,13 @@ def get_citation_information(data_source, site_ids=None):
         return df
 
 
-def _get_data_from_api(
-    data_source,
-    variable,
-    temporal_resolution,
-    aggregation,
-    depth_level=None,
-    date_start=None,
-    date_end=None,
-    latitude_range=None,
-    longitude_range=None,
-    site_ids=None,
-    state=None,
-    min_num_obs=1,
-    return_metadata=False,
-    all_attributes=False,
-):
-    
-    options = _convert_params_to_string_dict(
-        options
-    )
+def _get_data_from_api(**kwargs):
+    options = kwargs
+    options = _convert_params_to_string_dict(options)
 
     q_params = _construct_string_from_qparams(options)
-    # point_data_url = f"{HYDRODATA_URL}/api/point-data-app?{q_params}"
 
-    # Have two api calls if we also want to retrieve metadata
-    # one default call retrieves data
-    # an additional api call is made
-    # if we also want metadata
-    # it can use the same endpoint, returns a dataframe
-    point_data_url = "https://hydro-dev-aj.princeton.edu/api/point-data-app?variable=streamflow&temporal_resolution=daily&aggregation=average&date_start=2020-01-01&date_end=2020-01-03&lat_min=45&lat_max=46&lon_min=-75&lon_max=-70"
+    point_data_url = f"{HYDRODATA_URL}/api/point-data-app?{q_params}"
 
     try:
         headers = _validate_user()
@@ -295,7 +285,7 @@ def _get_data_from_api(
     except requests.exceptions.Timeout as e:
         raise ValueError(f"The point_data_url {point_data_url} has timed out.") from e
 
-    data_df = pd.read_pickle(pd.compat.io.BytesIO(response.content))
+    data_df = pd.read_pickle(io.BytesIO(response.content))
     return data_df
 
 
@@ -334,10 +324,17 @@ def _convert_params_to_string_dict(options):
     return options
 
 
-def _convert_strings_to_type(options
+def _convert_strings_to_type(
+    depth_level,
+    latitude_range,
+    longitude_range,
+    site_ids,
+    min_num_obs,
+    return_metadata,
+    all_attributes,
 ):
     """
-    Converts strings to jsons.
+    Converts strings to relevant types.
 
     Parameters
     ----------
@@ -345,29 +342,30 @@ def _convert_strings_to_type(options
         request options.
     """
 
-    for key, value in options.items():
-        if key == "depth_level":
-            if not isinstance(value, str):
-                options[key] = int(value)
-        if key == "latitude_range":
-            if not isinstance(value, str):
-                options[key] = ast.literal_eval(value)
-        if key == "longitude_range":
-            if not isinstance(value, str):
-                options[key] = ast.literal_eval(value)
-        if key == "site_ids":
-            if not isinstance(value, str):
-                options[key] = ast.literal_eval(value)
-        if key == "min_num_obs":
-            if not isinstance(value, str):
-                options[key] = int(value)
-        if key == "return_metadata":
-            if not isinstance(value, str):
-                options[key] = bool(value)
-        if key == "all_attributes":
-            if not isinstance(value, str):
-                options[key] = bool(value)
-    return options
+    if isinstance(depth_level, str):
+        depth_level = int(depth_level)
+    if isinstance(latitude_range, str):
+        latitude_range = ast.literal_eval(latitude_range)
+    if isinstance(longitude_range, str):
+        longitude_range = ast.literal_eval(longitude_range)
+    if isinstance(site_ids, str):
+        site_ids = ast.literal_eval(site_ids)
+    if isinstance(min_num_obs, str):
+        min_num_obs = int(min_num_obs)
+    if isinstance(return_metadata, str):
+        return_metadata = bool(return_metadata)
+    if isinstance(all_attributes, str):
+        all_attributes = bool(all_attributes)
+
+    return (
+        depth_level,
+        latitude_range,
+        longitude_range,
+        site_ids,
+        min_num_obs,
+        return_metadata,
+        all_attributes,
+    )
 
 
 def _construct_string_from_qparams(options):
@@ -386,7 +384,7 @@ def _construct_string_from_qparams(options):
     data : numpy array
         the requested data.
     """
-
+    print("The options are:", options)
     string_parts = [
         f"{name}={value}" for name, value in options.items() if value is not None
     ]
@@ -397,7 +395,7 @@ def _construct_string_from_qparams(options):
 def _validate_user():
     email, pin = get_registered_api_pin()
     url_security = f"{HYDRODATA_URL}/api/api_pins?pin={pin}&email={email}"
-    response = requests.get(url_security, timeout=15)
+    response = requests.get(url_security, headers=None, timeout=15)
     if not response.status_code == 200:
         raise ValueError(
             f"No registered PIN for email '{email}' and PIN {pin}. See documentation to register with a URL."
