@@ -383,7 +383,6 @@ def _construct_string_from_qparams(options):
     data : numpy array
         the requested data.
     """
-    print("The options are:", options)
     string_parts = [
         f"{name}={value}" for name, value in options.items() if value is not None
     ]
