@@ -10,11 +10,7 @@ HYDRODATA = '/hydrodata'
 DB_PATH = f'{HYDRODATA}/national_obs/point_obs.sqlite'
 
 
-def get_sites(data_source, variable, temporal_resolution, aggregation,
-              depth_level=None,
-              date_start=None, date_end=None,
-              latitude_range=None, longitude_range=None,
-              site_ids=None, state=None, site_networks=None):
+def get_sites(data_source, variable, temporal_resolution, aggregation, **kwargs):
     """
     Build DataFrame with site attribute metadata information.
 
@@ -34,21 +30,21 @@ def get_sites(data_source, variable, temporal_resolution, aggregation,
         Additional information specifying the aggregation method for the variable to be returned. 
         Options include descriptors such as 'average' and 'total'. Please see the README documentation
         for allowable combinations with `variable`.
-    depth_level : int
+    **depth_level : int
         Depth level in inches at which the measurement is taken. Necessary for `variable` = 'soil moisture'.
-    date_start : str; default=None
+    **date_start : str; default=None
         'YYYY-MM-DD' format date indicating beginning of time range.
-    date_end : str; default=None
+    **date_end : str; default=None
         'YYYY-MM-DD' format date indicating end of time range.
-    latitude_range : tuple; default=None
+    **latitude_range : tuple; default=None
         Latitude range bounds for the geographic domain; lesser value is provided first.
-    longitude_range : tuple; default=None
+    **longitude_range : tuple; default=None
         Longitude range bounds for the geographic domain; lesser value is provided first.
-    site_ids : list; default=None
+    **site_ids : list; default=None
         List of desired (string) site identifiers.
-    state : str; default=None
+    **state : str; default=None
         Two-letter postal code state abbreviation.
-    site_networks: list
+    **site_networks: list
         List of names of site networks. Can be a list with a single network name.
         Each network must have matching .csv file with a list of site ID values that comprise
         the network. This .csv file must be located under network_lists/{data_source}/{variable}
@@ -71,58 +67,58 @@ def get_sites(data_source, variable, temporal_resolution, aggregation,
     conn = sqlite3.connect(DB_PATH)
 
     # Get associated variable IDs for requested data types and time periods
-    var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, depth_level)
+    var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, kwargs)
 
     param_list = [var_id]
 
     # Date start
-    if date_start is not None:
+    if 'date_start' in kwargs:
         date_start_query = """ AND last_date_data_available >= ?"""
-        param_list.append(date_start)
+        param_list.append(kwargs['date_start'])
     else:
         date_start_query = """"""
 
     # Date end
-    if date_end is not None:
+    if 'date_end' in kwargs:
         date_end_query = """ AND first_date_data_available <= ?"""
-        param_list.append(date_end)
+        param_list.append(kwargs['date_end'])
     else:
         date_end_query = """"""
 
     # Latitude
-    if latitude_range is not None:
+    if 'latitude_range' in kwargs:
         lat_query = """ AND latitude BETWEEN ? AND ?"""
-        param_list.append(latitude_range[0])
-        param_list.append(latitude_range[1])
+        param_list.append(kwargs['latitude_range'][0])
+        param_list.append(kwargs['latitude_range'][1])
     else:
         lat_query = """"""
 
     # Longitude
-    if longitude_range is not None:
+    if 'longitude_range' in kwargs:
         lon_query = """ AND longitude BETWEEN ? AND ?"""
-        param_list.append(longitude_range[0])
-        param_list.append(longitude_range[1])
+        param_list.append(kwargs['longitude_range'][0])
+        param_list.append(kwargs['longitude_range'][1])
     else:
         lon_query = """"""
 
     # Site ID
-    if site_ids is not None:
-        site_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(site_ids))
-        for s in site_ids:
+    if 'site_ids' in kwargs:
+        site_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(kwargs['site_ids']))
+        for s in kwargs['site_ids']:
             param_list.append(s)
     else:
         site_query = """"""
 
     # State
-    if state is not None:
+    if 'state' in kwargs:
         state_query = """ AND state == ?"""
-        param_list.append(state)
+        param_list.append(kwargs['state'])
     else:
         state_query = """"""
 
     # Site Networks
-    if site_networks is not None:
-        network_site_list = utils.get_network_site_list(data_source, variable, site_networks)
+    if 'site_networks' in kwargs:
+        network_site_list = utils.get_network_site_list(data_source, variable, kwargs['site_networks'])
         network_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(network_site_list))
         for s in network_site_list:
             param_list.append(s)
@@ -150,18 +146,17 @@ def get_sites(data_source, variable, temporal_resolution, aggregation,
     return df
 
 
-def get_data(data_source, variable, temporal_resolution, aggregation,
-             depth_level=None,
-             date_start=None, date_end=None,
-             latitude_range=None, longitude_range=None,
-             site_ids=None, state=None, site_networks=None, min_num_obs=1):
+def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
+    #  depth_level=None,
+    #  date_start=None, date_end=None,
+    #  latitude_range=None, longitude_range=None,
+    #  site_ids=None, state=None, site_networks=None, min_num_obs=1):
     """
     Collect observations data into a Pandas DataFrame.
 
     Observations collected from HydroData for the specified data source, variable, temporal 
-    resolution, and aggregation. Optional arguments can be supplied for date bounds, geography bounds,
-    the minimum number of per-site observations allowed, and/or whether site metadata
-    should also be returned (in a separate DataFrame).
+    resolution, and aggregation. Optional arguments can be supplied for filters such as
+    date bounds, geography bounds, and/or the minimum number of per-site observations allowed.
 
     Parameters
     ----------
@@ -179,26 +174,26 @@ def get_data(data_source, variable, temporal_resolution, aggregation,
         Additional information specifying the aggregation method for the variable to be returned. 
         Options include descriptors such as 'average' and 'total'. Please see the README documentation
         for allowable combinations with `variable`.
-    depth_level : int
+    **depth_level : int
         Depth level in inches at which the measurement is taken. Necessary for `variable` = 'soil moisture'.
-    date_start : str; default=None
+    **date_start : str; default=None
         'YYYY-MM-DD' date indicating beginning of time range.
-    date_end : str; default=None
+    **date_end : str; default=None
         'YYYY-MM-DD' date indicating end of time range.
-    latitude_range : tuple; default=None
+    **latitude_range : tuple; default=None
         Latitude range bounds for the geographic domain; lesser value is provided first.
-    longitude_range : tuple; default=None
+    **longitude_range : tuple; default=None
         Longitude range bounds for the geographic domain; lesser value is provided first.
-    site_ids : list; default=None
+    **site_ids : list; default=None
         List of desired (string) site identifiers.
-    state : str; default=None
+    **state : str; default=None
         Two-letter postal code state abbreviation.
-    site_networks: list
+    **site_networks: list
         List of names of site networks. Can be a list with a single network name.
         Each network must have matching .csv file with a list of site ID values that comprise
         the network. This .csv file must be located under network_lists/{data_source}/{variable}
         in the package directory and named as 'network_name'.csv. Eg: `site_networks=['gagesii']`
-    min_num_obs : int; default=1
+    **min_num_obs : int; default=1
         Value for the minimum number of observations desired for a site to have.
 
     Returns
@@ -207,27 +202,20 @@ def get_data(data_source, variable, temporal_resolution, aggregation,
         Stacked observations data for a single variable, filtered to only sites that
         (optionally) have the minimum number of observations specified, within the 
         defined geographic and/or date range.
-    metadata_df : DataFrame; optional
-        Metadata about the sites present in `data_df` for the desired variable.
     """
 
     # Create database connection
     conn = sqlite3.connect(DB_PATH)
 
     # Validation checks on inputs
-    utils.check_inputs(data_source, variable, temporal_resolution, aggregation,
-                       depth_level)
+    utils.check_inputs(data_source, variable, temporal_resolution, aggregation, kwargs)
 
     # Get associated variable IDs for requested data types and time periods
-    var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, depth_level)
+    var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, kwargs)
 
     # Get site list
-    sites_df = get_sites(data_source=data_source, variable=variable,
-                         temporal_resolution=temporal_resolution,
-                         aggregation=aggregation, depth_level=depth_level,
-                         date_start=date_start, date_end=date_end,
-                         latitude_range=latitude_range, longitude_range=longitude_range,
-                         site_ids=site_ids, state=state, site_networks=site_networks)
+    sites_df = get_sites(data_source, variable,
+                         temporal_resolution, aggregation, kwargs)
 
     if len(sites_df) == 0:
         raise ValueError('There are zero sites that satisfy the given parameters.')
@@ -236,10 +224,10 @@ def get_data(data_source, variable, temporal_resolution, aggregation,
     site_list = list(sites_df['site_id'])
 
     if (var_id in (1, 2, 3, 4)) | (var_id in range(6, 25)):
-        data_df = utils.get_data_nc(site_list, var_id, date_start, date_end, min_num_obs)
+        data_df = utils.get_data_nc(site_list, var_id, kwargs)
 
     elif var_id == 5:
-        data_df = utils.get_data_sql(conn, var_id, date_start, date_end, min_num_obs)
+        data_df = utils.get_data_sql(conn, var_id, kwargs)
 
     conn.close()
 
@@ -259,13 +247,6 @@ def get_metadata(site_ids):
     -------
     DataFrame
         Site-level DataFrame of site-level metadata.
-
-    Notes
-    -----
-    The returned field 'record_count' is OVERALL record count. Filtering of metadata 
-    only applies at the site level, so only sites within the provided bounds 
-    (space and time) are included. The record count does not reflect any filtering 
-    at the data/observation level.
     """
     # Create database connection
     conn = sqlite3.connect(DB_PATH)

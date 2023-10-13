@@ -11,7 +11,7 @@ import numpy as np
 import xarray as xr
 
 
-def check_inputs(data_source, variable, temporal_resolution, aggregation, depth_level):
+def check_inputs(data_source, variable, temporal_resolution, aggregation, **kwargs):
     """
     Checks on inputs to get_observations function.
 
@@ -44,13 +44,13 @@ def check_inputs(data_source, variable, temporal_resolution, aggregation, depth_
     assert aggregation in ['average', 'instantaneous', 'total', 'total, snow-adjusted',
                            'start-of-day', 'accumulated', 'minimum', 'maximum']
     assert data_source in ['usgs_nwis', 'usda_nrcs', 'ameriflux']
-    assert depth_level in [2, 4, 8, 20, 40, None]
 
     if variable == 'soil moisture':
-        assert depth_level is not None
+        assert 'depth_level' in kwargs
+        assert kwargs['depth_level'] in [2, 4, 8, 20, 40]
 
 
-def get_var_id(conn, data_source, variable, temporal_resolution, aggregation, depth_level=None):
+def get_var_id(conn, data_source, variable, temporal_resolution, aggregation, **kwargs):
     """
     Return mapped var_id.
 
@@ -91,7 +91,7 @@ def get_var_id(conn, data_source, variable, temporal_resolution, aggregation, de
                     AND aggregation = ?
                     AND depth_level = ?
                 """
-        param_list = [data_source, variable, temporal_resolution, aggregation, depth_level]
+        param_list = [data_source, variable, temporal_resolution, aggregation, kwargs['depth_level']]
 
     else:
         query = """
@@ -297,7 +297,7 @@ def filter_min_num_obs(df, min_num_obs):
     return df_filtered
 
 
-def get_data_nc(site_list, var_id, date_start, date_end, min_num_obs):
+def get_data_nc(site_list, var_id, **kwargs):
     """
     Get observations data for data that is stored in NetCDF files.
 
@@ -334,10 +334,10 @@ def get_data_nc(site_list, var_id, date_start, date_end, min_num_obs):
 
     varname = varname_map[str(var_id)]
 
-    if date_start != None:
-        date_start_dt = np.datetime64(date_start)
-    if date_end != None:
-        date_end_dt = np.datetime64(date_end)
+    if 'date_start' in kwargs:
+        date_start_dt = np.datetime64(kwargs['date_start'])
+    if 'date_end' in kwargs:
+        date_end_dt = np.datetime64(kwargs['date_end'])
 
     print('collecting data...')
 
@@ -354,13 +354,13 @@ def get_data_nc(site_list, var_id, date_start, date_end, min_num_obs):
         temp['datetime'] = pd.DatetimeIndex(temp['datetime'].values)
 
         # subset to only observations within desired time range
-        if (date_start == None) and (date_end == None):
+        if ('date_start' not in kwargs) and ('date_end' not in kwargs):
             temp_wy = temp
-        elif (date_start == None) and (date_end != None):
+        elif ('date_start' not in kwargs) and ('date_end' in kwargs):
             temp_wy = temp.sel(datetime=(temp.datetime <= date_end_dt))
-        elif (date_start != None) and (date_end == None):
+        elif ('date_start' in kwargs) and ('date_end' not in kwargs):
             temp_wy = temp.sel(datetime=(temp.datetime >= date_start_dt))
-        elif (date_start != None) and (date_end != None):
+        elif ('date_start' in kwargs) and ('date_end' in kwargs):
             temp_wy = temp.sel(datetime=(temp.datetime >= date_start_dt) & (temp.datetime <= date_end_dt))
 
         if i == 0:
@@ -377,12 +377,13 @@ def get_data_nc(site_list, var_id, date_start, date_end, min_num_obs):
     print('data collected.')
 
     data_df = convert_to_pandas(ds)
-    final_data_df = filter_min_num_obs(data_df, min_num_obs)
+    if 'min_num_obs' in kwargs:
+        return filter_min_num_obs(data_df, kwargs['min_num_obs'])
+    else:
+        return data_df
 
-    return final_data_df
 
-
-def get_data_sql(conn, var_id, date_start, date_end, min_num_obs):
+def get_data_sql(conn, var_id, **kwargs):
     """
     Get observations data for data that is stored in a SQL table.
 
@@ -413,19 +414,23 @@ def get_data_sql(conn, var_id, date_start, date_end, min_num_obs):
     #   pumping_status == '1' --> Static (not pumping)
     #   pumping_status == 'P' --> Pumping
     #   pumping_status == '' --> unknown (not reported)
+    if 'min_num_obs' not in kwargs:
+        min_num_obs = 1
+    else:
+        min_num_obs = kwargs['min_num_obs']
 
-    if (date_start == None) and (date_end == None):
+    if ('date_start' not in kwargs) and ('date_end' not in kwargs):
         date_query = """"""
         param_list = [min_num_obs]
-    elif (date_start == None) and (date_end != None):
+    elif ('date_start' not in kwargs) and ('date_end' in kwargs):
         date_query = """ WHERE w.date <= ?"""
-        param_list = [date_end, min_num_obs, date_end]
-    elif (date_start != None) and (date_end == None):
+        param_list = [kwargs['date_end'], min_num_obs, kwargs['date_end']]
+    elif ('date_start' in kwargs) and ('date_end' not in kwargs):
         date_query = """ WHERE w.date >= ?"""
-        param_list = [date_start, min_num_obs, date_start]
-    elif (date_start != None) and (date_end != None):
+        param_list = [kwargs['date_start'], min_num_obs, kwargs['date_start']]
+    elif ('date_start' in kwargs) and ('date_end' in kwargs):
         date_query = """ WHERE w.date >= ? AND w.date <= ?"""
-        param_list = [date_start, date_end, min_num_obs, date_start, date_end]
+        param_list = [kwargs['date_start'], kwargs['date_end'], min_num_obs, kwargs['date_start'], kwargs['date_end']]
 
     query = """
             SELECT w.site_id, w.date, w.wtd, w.pumping_status
