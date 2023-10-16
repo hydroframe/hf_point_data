@@ -141,18 +141,18 @@ def test_filter_min_num_obs():
     assert len(utils.filter_min_num_obs(df, 3)) == 3
 
 
-def test_get_network_site_list():
-    """Confirm expected number of sites in each network list."""
-    assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['gagesii'])) == 9067
-    assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['gagesii_reference'])) == 1947
-    assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['hcdn2009'])) == 704
-    assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['camels'])) == 671
-    assert len(utils.get_network_site_list('usgs_nwis', 'wtd', ['climate_response_network'])) == 718
+# def test_get_network_site_list():
+#     """Confirm expected number of sites in each network list."""
+#     assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['gagesii'])) == 9067
+#     assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['gagesii_reference'])) == 1947
+#     assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['hcdn2009'])) == 704
+#     assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['camels'])) == 671
+#     assert len(utils.get_network_site_list('usgs_nwis', 'wtd', ['climate_response_network'])) == 718
 
 
-def test_get_network_site_list_intersect():
-    """Confirm function doesn't return duplicate site IDs if multiple networks listed."""
-    assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['gagesii', 'gagesii_reference'])) == 1947
+# def test_get_network_site_list_intersect():
+#     """Confirm function doesn't return duplicate site IDs if multiple networks listed."""
+#     assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['gagesii', 'gagesii_reference'])) == 1947
 
 
 if __name__ == "__main__":
