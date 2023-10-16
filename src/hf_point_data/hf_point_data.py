@@ -67,7 +67,7 @@ def get_sites(data_source, variable, temporal_resolution, aggregation, **kwargs)
     conn = sqlite3.connect(DB_PATH)
 
     # Get associated variable IDs for requested data types and time periods
-    var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, kwargs)
+    var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, **kwargs)
 
     param_list = [var_id]
 
@@ -208,14 +208,14 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     conn = sqlite3.connect(DB_PATH)
 
     # Validation checks on inputs
-    utils.check_inputs(data_source, variable, temporal_resolution, aggregation, kwargs)
+    utils.check_inputs(data_source, variable, temporal_resolution, aggregation, **kwargs)
 
     # Get associated variable IDs for requested data types and time periods
-    var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, kwargs)
+    var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, **kwargs)
 
     # Get site list
     sites_df = get_sites(data_source, variable,
-                         temporal_resolution, aggregation, kwargs)
+                         temporal_resolution, aggregation, **kwargs)
 
     if len(sites_df) == 0:
         raise ValueError('There are zero sites that satisfy the given parameters.')
@@ -224,10 +224,10 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     site_list = list(sites_df['site_id'])
 
     if (var_id in (1, 2, 3, 4)) | (var_id in range(6, 25)):
-        data_df = utils.get_data_nc(site_list, var_id, kwargs)
+        data_df = utils.get_data_nc(site_list, var_id, **kwargs)
 
     elif var_id == 5:
-        data_df = utils.get_data_sql(conn, var_id, kwargs)
+        data_df = utils.get_data_sql(conn, var_id, **kwargs)
 
     conn.close()
 
