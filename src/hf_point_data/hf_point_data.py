@@ -10,142 +10,6 @@ HYDRODATA = '/hydrodata'
 DB_PATH = f'{HYDRODATA}/national_obs/point_obs.sqlite'
 
 
-def get_sites(data_source, variable, temporal_resolution, aggregation, **kwargs):
-    """
-    Build DataFrame with site attribute metadata information.
-
-    Parameters
-    ----------
-    data_source : str
-        Source from which requested data originated. Currently supported: 'usgs_nwis', 'usda_nrcs', 
-        'ameriflux'.   
-    variable : str
-        Description of type of data requested. Currently supported: 'streamflow', 'wtd', 'swe', 
-        'precipitation', 'temperature', 'soil moisture', 'latent heat flux', 'sensible heat flux', 
-        'shortwave radiation', 'longwave radiation', 'vapor pressure deficit', 'wind speed'.
-    temporal_resolution : str
-        Collection frequency of data requested. Currently supported: 'daily', 'hourly', and 'instantaneous'.
-        Please see the README documentation for allowable combinations with `variable`.
-    aggregation : str
-        Additional information specifying the aggregation method for the variable to be returned. 
-        Options include descriptors such as 'average' and 'total'. Please see the README documentation
-        for allowable combinations with `variable`.
-    **depth_level : int
-        Depth level in inches at which the measurement is taken. Necessary for `variable` = 'soil moisture'.
-    **date_start : str; default=None
-        'YYYY-MM-DD' format date indicating beginning of time range.
-    **date_end : str; default=None
-        'YYYY-MM-DD' format date indicating end of time range.
-    **latitude_range : tuple; default=None
-        Latitude range bounds for the geographic domain; lesser value is provided first.
-    **longitude_range : tuple; default=None
-        Longitude range bounds for the geographic domain; lesser value is provided first.
-    **site_ids : list; default=None
-        List of desired (string) site identifiers.
-    **state : str; default=None
-        Two-letter postal code state abbreviation.
-    **site_networks: list
-        List of names of site networks. Can be a list with a single network name.
-        Each network must have matching .csv file with a list of site ID values that comprise
-        the network. This .csv file must be located under network_lists/{data_source}/{variable}
-        in the package directory and named as 'network_name'.csv. Eg: `site_networks=['gagesii']`
-
-    Returns
-    -------
-    DataFrame
-        Site-level DataFrame of attribute metadata information.
-
-    Notes
-    -----
-    The returned field 'record_count' is OVERALL record count. Filtering of metadata 
-    only applies at the site level, so only sites within the provided bounds 
-    (space and time) are included. The record count does not reflect any filtering 
-    at the data/observation level.
-    """
-
-    # Create database connection
-    conn = sqlite3.connect(DB_PATH)
-
-    # Get associated variable IDs for requested data types and time periods
-    var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, **kwargs)
-
-    param_list = [var_id]
-
-    # Date start
-    if 'date_start' in kwargs:
-        date_start_query = """ AND last_date_data_available >= ?"""
-        param_list.append(kwargs['date_start'])
-    else:
-        date_start_query = """"""
-
-    # Date end
-    if 'date_end' in kwargs:
-        date_end_query = """ AND first_date_data_available <= ?"""
-        param_list.append(kwargs['date_end'])
-    else:
-        date_end_query = """"""
-
-    # Latitude
-    if 'latitude_range' in kwargs:
-        lat_query = """ AND latitude BETWEEN ? AND ?"""
-        param_list.append(kwargs['latitude_range'][0])
-        param_list.append(kwargs['latitude_range'][1])
-    else:
-        lat_query = """"""
-
-    # Longitude
-    if 'longitude_range' in kwargs:
-        lon_query = """ AND longitude BETWEEN ? AND ?"""
-        param_list.append(kwargs['longitude_range'][0])
-        param_list.append(kwargs['longitude_range'][1])
-    else:
-        lon_query = """"""
-
-    # Site ID
-    if 'site_ids' in kwargs:
-        site_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(kwargs['site_ids']))
-        for s in kwargs['site_ids']:
-            param_list.append(s)
-    else:
-        site_query = """"""
-
-    # State
-    if 'state' in kwargs:
-        state_query = """ AND state == ?"""
-        param_list.append(kwargs['state'])
-    else:
-        state_query = """"""
-
-    # Site Networks
-    if 'site_networks' in kwargs:
-        network_site_list = utils.get_network_site_list(data_source, variable, kwargs['site_networks'])
-        network_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(network_site_list))
-        for s in network_site_list:
-            param_list.append(s)
-    else:
-        network_query = """"""
-
-    query = """
-            SELECT s.site_id, s.site_name, s.site_type, s.agency, s.state,
-                   s.latitude, s.longitude, s.huc, o.first_date_data_available,
-                   o.last_date_data_available, o.record_count
-            FROM sites s
-            INNER JOIN observations o
-            ON s.site_id = o.site_id AND o.var_id == ?
-            WHERE first_date_data_available <> 'None'
-            """ + date_start_query + date_end_query + lat_query + lon_query + site_query + state_query + network_query
-
-    df = pd.read_sql_query(query, conn, params=param_list)
-
-    # Clean up HUC to string of appropriate length
-    df['huc8'] = df['huc'].apply(lambda x: utils.clean_huc(x))
-    df.drop(columns=['huc'], inplace=True)
-
-    conn.close()
-
-    return df
-
-
 def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     """
     Collect observations data into a Pandas DataFrame.
@@ -210,8 +74,8 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, **kwargs)
 
     # Get site list
-    sites_df = get_sites(data_source, variable,
-                         temporal_resolution, aggregation, **kwargs)
+    sites_df = utils.get_sites(conn, data_source, variable,
+                               temporal_resolution, aggregation, **kwargs)
 
     if len(sites_df) == 0:
         raise ValueError('There are zero sites that satisfy the given parameters.')
@@ -230,7 +94,7 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     return data_df.reset_index().drop('index', axis=1)
 
 
-def get_metadata(site_ids):
+def get_metadata(data_source, variable, temporal_resolution, aggregation, **kwargs):
     """
     Return DataFrame with site metadata for the requested site IDs.
 
@@ -247,20 +111,16 @@ def get_metadata(site_ids):
     # Create database connection
     conn = sqlite3.connect(DB_PATH)
 
-    # Site ID
-    query = """
-            SELECT site_id, site_type, agency, site_name, latitude, longitude, state, huc,
-                   site_query_url, date_metadata_last_updated, tz_cd, doi 
-            FROM sites
-            WHERE site_id IN (%s)""" % ','.join('?'*len(site_ids))
-
-    metadata_df = pd.read_sql_query(query, conn, params=site_ids)
+    metadata_df = utils.get_sites(conn, data_source, variable,
+                                  temporal_resolution, aggregation, **kwargs)
 
     # Clean up HUC to string of appropriate length
     metadata_df['huc8'] = metadata_df['huc'].apply(lambda x: utils.clean_huc(x))
     metadata_df.drop(columns=['huc'], inplace=True)
 
     # Merge on additional metadata attribute tables as needed
+    site_ids = list(metadata_df['site_id'])
+
     if 'stream gauge' in metadata_df['site_type'].unique():
         attributes_df = pd.read_sql_query(
             """SELECT * FROM streamgauge_attributes WHERE site_id IN (%s)""" % ','.join('?' * len(site_ids)),
