@@ -147,10 +147,6 @@ def get_sites(data_source, variable, temporal_resolution, aggregation, **kwargs)
 
 
 def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
-    #  depth_level=None,
-    #  date_start=None, date_end=None,
-    #  latitude_range=None, longitude_range=None,
-    #  site_ids=None, state=None, site_networks=None, min_num_obs=1):
     """
     Collect observations data into a Pandas DataFrame.
 
