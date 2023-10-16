@@ -127,7 +127,7 @@ def get_sites(data_source, variable, temporal_resolution, aggregation, **kwargs)
 
     query = """
             SELECT s.site_id, s.site_name, s.site_type, s.agency, s.state,
-                   s.latitude, s.longitude, s.huc, o.var_id, o.first_date_data_available,
+                   s.latitude, s.longitude, s.huc, o.first_date_data_available,
                    o.last_date_data_available, o.record_count
             FROM sites s
             INNER JOIN observations o
