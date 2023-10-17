@@ -14,13 +14,13 @@ from hf_point_data import hf_point_data, utils  # noqa
 HYDRODATA = "test_data/hydrodata"
 
 
-class MockResponse:
+class MockResponseMetadata:
     """Mock the flask.request response."""
 
     def __init__(self):
         data = {
             "headers": ["site_id", "2020-01-01", "2020-01-02"],
-            "0": ["01019000", "18.39500", "18.36670"],
+            "0": ["01019001", "18.39500", "18.36670"],
             "1": ["01027200", "4.92420", "4.64120"],
             "2": ["01029500", "35.09200", "33.67700"],
         }
@@ -39,11 +39,35 @@ class MockResponse:
         self.checksum = ""
 
 
+class MockResponse:
+    """Mock the flask.request response."""
+
+    def __init__(self):
+        data = {
+            "headers": ["site_id", "2020-01-01", "2020-01-02"],
+            "0": ["01019000", "18.39500", "18.36670"],
+            "1": ["01027200", "4.92420", "4.64120"],
+            "2": ["01029500", "35.09200", "33.67700"],
+        }
+
+        # Create a DataFrame with specified column names
+        df = pd.DataFrame(data)
+        buffer = io.BytesIO()
+        df.to_pickle(buffer)
+        data_bytes = buffer.getvalue()
+
+        self.headers = {}
+        self.status_code = 200
+        self.content = data_bytes
+        self.text = None
+        self.checksum = ""
+
+
 class MockResponseSecurity:
     """Mock the flask.request response."""
 
     def __init__(self):
-        data = b'{"email":"dummy@email.com","expires":"2023/10/14 18:31:11 GMT-0000","groups":["demo"],"jwt_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkdW1teSIsImVtYWlsIjoiZHVtbXlAZW1haWwuY29tIiwiZ3JvdXBzIjpbImRlbW8iXSwiZXhwIjoxNjk3MzA4MjcxfQ.Z6YJHZOlo3OdzdmuLHAqdaRIraH1Z-WzoKtXQSbh92w","user_id":"dummy"}'
+        data = b'{"email":"dummy@email.com","expires":"2130/10/14 18:31:11 GMT-0000","groups":["demo"],"jwt_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkdW1teSIsImVtYWlsIjoiZHVtbXlAZW1haWwuY29tIiwiZ3JvdXBzIjpbImRlbW8iXSwiZXhwIjoxNjk3MzA4MjcxfQ.Z6YJHZOlo3OdzdmuLHAqdaRIraH1Z-WzoKtXQSbh92w","user_id":"dummy"}'
 
         self.headers = {}
         self.status_code = 200
@@ -59,6 +83,17 @@ def mock_requests_get(point_data_url, headers, timeout=180):
         response = MockResponseSecurity()
     else:
         response = MockResponse()
+
+    return response
+
+
+def mock_requests_get_metadata(point_data_url, headers, timeout=180):
+    """Create a mock csv response."""
+
+    if headers is None:
+        response = MockResponseSecurity()
+    else:
+        response = MockResponseMetadata()
 
     return response
 
@@ -81,8 +116,30 @@ def test_get_dataframe():
             latitude_range=(45, 46),
             longitude_range=(-110, -108),
         )
-
+        
         assert (data_df.loc[0, "0"]) == "01019000"
+
+
+def test_get_meta_dataframe():
+    """Test ability to retreive vegp file."""
+
+    with mock.patch(
+        "requests.get",
+        new=mock_requests_get_metadata,
+    ):
+        hf_point_data.HYDRODATA = "/empty"
+        data_df = hf_point_data.get_metadata(
+            "usgs_nwis",
+            "streamflow",
+            "daily",
+            "average",
+            date_start="2020-01-01",
+            date_end="2020-01-03",
+            latitude_range=(45, 46),
+            longitude_range=(-110, -108),
+        )
+
+        assert (data_df.loc[0, "0"]) == "01019001"
 
 
 def test_check_inputs():
