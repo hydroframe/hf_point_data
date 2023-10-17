@@ -14,6 +14,9 @@ import hf_point_data.utils as utils
 HYDRODATA = "/hydrodata"
 DB_PATH = f"{HYDRODATA}/national_obs/point_obs.sqlite"
 HYDRODATA_URL = os.getenv("HYDRODATA_URL", "https://hydro-dev-aj.princeton.edu")
+HYDRODATA = "/hydrodata"
+DB_PATH = f"{HYDRODATA}/national_obs/point_obs.sqlite"
+HYDRODATA_URL = os.getenv("HYDRODATA_URL", "https://hydro-dev-aj.princeton.edu")
 
 
 def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
@@ -29,7 +32,11 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     data_source : str
         Source from which requested data originated. Currently supported: 'usgs_nwis', 'usda_nrcs',
         'ameriflux'.
+        Source from which requested data originated. Currently supported: 'usgs_nwis', 'usda_nrcs',
+        'ameriflux'.
     variable : str
+        Description of type of data requested. Currently supported: 'streamflow', 'wtd', 'swe',
+        'precipitation', 'temperature', 'soil moisture', 'latent heat flux', 'sensible heat flux',
         Description of type of data requested. Currently supported: 'streamflow', 'wtd', 'swe',
         'precipitation', 'temperature', 'soil moisture', 'latent heat flux', 'sensible heat flux',
         'shortwave radiation', 'longwave radiation', 'vapor pressure deficit', 'wind speed'.
@@ -37,6 +44,7 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
         Collection frequency of data requested. Currently supported: 'daily', 'hourly', and 'instantaneous'.
         Please see the README documentation for allowable combinations with `variable`.
     aggregation : str
+        Additional information specifying the aggregation method for the variable to be returned.
         Additional information specifying the aggregation method for the variable to be returned.
         Options include descriptors such as 'average' and 'total'. Please see the README documentation
         for allowable combinations with `variable`.
@@ -66,6 +74,7 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     -------
     data_df : DataFrame
         Stacked observations data for a single variable, filtered to only sites that
+        (optionally) have the minimum number of observations specified, within the
         (optionally) have the minimum number of observations specified, within the
         defined geographic and/or date range.
     """
@@ -474,3 +483,183 @@ def get_citations(data_source, site_ids=None):
 
         df = pd.read_sql_query(query, conn, params=site_ids)
         return df
+
+
+def _get_data_from_api(**kwargs):
+    options = kwargs
+    options = _convert_params_to_string_dict(options)
+
+    q_params = _construct_string_from_qparams(options)
+
+    point_data_url = f"{HYDRODATA_URL}/api/point-data-app?{q_params}"
+
+    try:
+        headers = _validate_user()
+        response = requests.get(point_data_url, headers=headers, timeout=180)
+        if response.status_code != 200:
+            raise ValueError(
+                f"The  {point_data_url} returned error code {response.status_code}."
+            )
+
+    except requests.exceptions.Timeout as e:
+        raise ValueError(f"The point_data_url {point_data_url} has timed out.") from e
+
+    data_df = pd.read_pickle(io.BytesIO(response.content))
+    return data_df
+
+
+def _convert_params_to_string_dict(options):
+    """
+    Converts types other than strings to strings.
+
+    Parameters
+    ----------
+    options : dictionary
+        request options.
+    """
+
+    for key, value in options.items():
+        if key == "depth_level":
+            if not isinstance(value, str):
+                options[key] = str(value)
+        if key == "latitude_range":
+            if not isinstance(value, str):
+                options[key] = str(value)
+        if key == "longitude_range":
+            if not isinstance(value, str):
+                options[key] = str(value)
+        if key == "site_ids":
+            if not isinstance(value, str):
+                options[key] = str(value)
+        if key == "min_num_obs":
+            if not isinstance(value, str):
+                options[key] = str(value)
+        if key == "return_metadata":
+            if not isinstance(value, str):
+                options[key] = str(value)
+        if key == "all_attributes":
+            if not isinstance(value, str):
+                options[key] = str(value)
+    return options
+
+
+def _convert_strings_to_type(
+    depth_level,
+    latitude_range,
+    longitude_range,
+    site_ids,
+    min_num_obs,
+    return_metadata,
+    all_attributes,
+):
+    """
+    Converts strings to relevant types.
+
+    Parameters
+    ----------
+    options : dictionary
+        request options.
+    """
+
+    if isinstance(depth_level, str):
+        depth_level = int(depth_level)
+    if isinstance(latitude_range, str):
+        latitude_range = ast.literal_eval(latitude_range)
+    if isinstance(longitude_range, str):
+        longitude_range = ast.literal_eval(longitude_range)
+    if isinstance(site_ids, str):
+        site_ids = ast.literal_eval(site_ids)
+    if isinstance(min_num_obs, str):
+        min_num_obs = int(min_num_obs)
+    if isinstance(return_metadata, str):
+        return_metadata = bool(return_metadata)
+    if isinstance(all_attributes, str):
+        all_attributes = bool(all_attributes)
+
+    return (
+        depth_level,
+        latitude_range,
+        longitude_range,
+        site_ids,
+        min_num_obs,
+        return_metadata,
+        all_attributes,
+    )
+
+
+def _construct_string_from_qparams(options):
+    """
+    Constructs the query parameters from the entry and options provided.
+
+    Parameters
+    ----------
+    entry : hydroframe.data_catalog.data_model_access.ModelTableRow
+        variable to be downloaded.
+    options : dictionary
+        datast to which the variable belongs.
+
+    Returns
+    -------
+    data : numpy array
+        the requested data.
+    """
+    string_parts = [
+        f"{name}={value}" for name, value in options.items() if value is not None
+    ]
+    result_string = "&".join(string_parts)
+    return result_string
+
+
+def _validate_user():
+    email, pin = get_registered_api_pin()
+    url_security = f"{HYDRODATA_URL}/api/api_pins?pin={pin}&email={email}"
+    response = requests.get(url_security, headers=None, timeout=15)
+    if not response.status_code == 200:
+        raise ValueError(
+            f"No registered PIN for email '{email}' and PIN {pin}. See documentation to register with a URL."
+        )
+    json_string = response.content.decode("utf-8")
+    jwt_json = json.loads(json_string)
+    expires_string = jwt_json.get("expires")
+    if expires_string:
+        expires = datetime.datetime.strptime(
+            expires_string, "%Y/%m/%d %H:%M:%S GMT-0000"
+        )
+        now = datetime.datetime.now()
+        if now > expires:
+            raise ValueError(
+                "PIN has expired. Please re-register it from https://hydrogen.princeton.edu/pin"
+            )
+    jwt_token = jwt_json["jwt_token"]
+    headers = {}
+    headers["Authorization"] = f"Bearer {jwt_token}"
+    return headers
+
+
+def get_registered_api_pin() -> Tuple[str, str]:
+    """
+    Get the email and pin registered by the current user.
+
+    Returns:
+        A tuple (email, pin)
+    Raises:
+        ValueError if no email/pin was registered
+    """
+
+    pin_dir = os.path.expanduser("~/.hydrodata")
+    pin_path = f"{pin_dir}/pin.json"
+    if not os.path.exists(pin_path):
+        raise ValueError(
+            "No email/pin was registered. Use the register_api() method to register the pin you created at the website."
+        )
+    try:
+        with open(pin_path, "r") as stream:
+            contents = stream.read()
+            parsed_contents = json.loads(contents)
+            email = parsed_contents.get("email")
+            pin = parsed_contents.get("pin")
+            return (email, pin)
+    except Exception as e:
+        raise ValueError(
+            "No email/pin was registered. Use the register_api() method to register the pin you created at the website."
+        ) from e

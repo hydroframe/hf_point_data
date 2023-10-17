@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from hf_point_data import hf_point_data, utils  # noqa
 
