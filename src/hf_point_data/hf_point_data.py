@@ -1,44 +1,43 @@
-import pandas as pd
-import sqlite3
-import requests
+"""Module to retrieve point observations."""
+# pylint: disable=C0301
+import datetime
+from typing import Tuple
 import io
 import ast
 import os
 import json
-from typing import Tuple
-import datetime
-import datetime as dt
-import numpy as np
-import xarray as xr
-
+import sqlite3
+import pandas as pd
+import requests
 import hf_point_data.utils as utils
 
-HYDRODATA = '/hydrodata'
-DB_PATH = f'{HYDRODATA}/national_obs/point_obs.sqlite'
+HYDRODATA = "/hydrodata"
+DB_PATH = f"{HYDRODATA}/national_obs/point_obs.sqlite"
 HYDRODATA_URL = os.getenv("HYDRODATA_URL", "https://hydro-dev-aj.princeton.edu")
+
 
 def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     """
     Collect observations data into a Pandas DataFrame.
 
-    Observations collected from HydroData for the specified data source, variable, temporal 
+    Observations collected from HydroData for the specified data source, variable, temporal
     resolution, and aggregation. Optional arguments can be supplied for filters such as
     date bounds, geography bounds, and/or the minimum number of per-site observations allowed.
 
     Parameters
     ----------
     data_source : str
-        Source from which requested data originated. Currently supported: 'usgs_nwis', 'usda_nrcs', 
-        'ameriflux'.   
+        Source from which requested data originated. Currently supported: 'usgs_nwis', 'usda_nrcs',
+        'ameriflux'.
     variable : str
-        Description of type of data requested. Currently supported: 'streamflow', 'wtd', 'swe', 
-        'precipitation', 'temperature', 'soil moisture', 'latent heat flux', 'sensible heat flux', 
+        Description of type of data requested. Currently supported: 'streamflow', 'wtd', 'swe',
+        'precipitation', 'temperature', 'soil moisture', 'latent heat flux', 'sensible heat flux',
         'shortwave radiation', 'longwave radiation', 'vapor pressure deficit', 'wind speed'.
     temporal_resolution : str
         Collection frequency of data requested. Currently supported: 'daily', 'hourly', and 'instantaneous'.
         Please see the README documentation for allowable combinations with `variable`.
     aggregation : str
-        Additional information specifying the aggregation method for the variable to be returned. 
+        Additional information specifying the aggregation method for the variable to be returned.
         Options include descriptors such as 'average' and 'total'. Please see the README documentation
         for allowable combinations with `variable`.
     **depth_level : int
@@ -67,7 +66,7 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     -------
     data_df : DataFrame
         Stacked observations data for a single variable, filtered to only sites that
-        (optionally) have the minimum number of observations specified, within the 
+        (optionally) have the minimum number of observations specified, within the
         defined geographic and/or date range.
     """
 
@@ -77,9 +76,9 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     if run_remote:
         data_df = _get_data_from_api(
             "data_only",
-            data_source, 
-            variable, 
-            temporal_resolution, 
+            data_source,
+            variable,
+            temporal_resolution,
             aggregation,
             options,
         )
@@ -92,20 +91,25 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     conn = sqlite3.connect(DB_PATH)
 
     # Validation checks on inputs
-    utils.check_inputs(data_source, variable, temporal_resolution, aggregation, **kwargs)
+    utils.check_inputs(
+        data_source, variable, temporal_resolution, aggregation, **kwargs
+    )
 
     # Get associated variable IDs for requested data types and time periods
-    var_id = utils.get_var_id(conn, data_source, variable, temporal_resolution, aggregation, **kwargs)
+    var_id = utils.get_var_id(
+        conn, data_source, variable, temporal_resolution, aggregation, **kwargs
+    )
 
     # Get site list
-    sites_df = utils.get_sites(conn, data_source, variable,
-                               temporal_resolution, aggregation, **kwargs)
+    sites_df = utils.get_sites(
+        conn, data_source, variable, temporal_resolution, aggregation, **kwargs
+    )
 
     if len(sites_df) == 0:
-        raise ValueError('There are zero sites that satisfy the given parameters.')
+        raise ValueError("There are zero sites that satisfy the given parameters.")
 
     # Get data
-    site_list = list(sites_df['site_id'])
+    site_list = list(sites_df["site_id"])
 
     if (var_id in (1, 2, 3, 4)) | (var_id in range(6, 25)):
         data_df = utils.get_data_nc(site_list, var_id, **kwargs)
@@ -115,7 +119,7 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
 
     conn.close()
 
-    return data_df.reset_index().drop('index', axis=1)
+    return data_df.reset_index().drop("index", axis=1)
 
 
 def get_metadata(data_source, variable, temporal_resolution, aggregation, **kwargs):
@@ -139,9 +143,9 @@ def get_metadata(data_source, variable, temporal_resolution, aggregation, **kwar
     if run_remote:
         data_df = _get_data_from_api(
             "metadata_only",
-            data_source, 
-            variable, 
-            temporal_resolution, 
+            data_source,
+            variable,
+            temporal_resolution,
             aggregation,
             options,
         )
@@ -153,55 +157,65 @@ def get_metadata(data_source, variable, temporal_resolution, aggregation, **kwar
     # Create database connection
     conn = sqlite3.connect(DB_PATH)
 
-    metadata_df = utils.get_sites(conn, data_source, variable,
-                                  temporal_resolution, aggregation, **kwargs)
+    metadata_df = utils.get_sites(
+        conn, data_source, variable, temporal_resolution, aggregation, **kwargs
+    )
 
     # Clean up HUC to string of appropriate length
-    metadata_df['huc8'] = metadata_df['huc'].apply(lambda x: utils.clean_huc(x))
-    metadata_df.drop(columns=['huc'], inplace=True)
+    metadata_df["huc8"] = metadata_df["huc"].apply(lambda x: utils.clean_huc(x))
+    metadata_df.drop(columns=["huc"], inplace=True)
 
     # Merge on additional metadata attribute tables as needed
-    site_ids = list(metadata_df['site_id'])
+    site_ids = list(metadata_df["site_id"])
 
-    if 'stream gauge' in metadata_df['site_type'].unique():
+    if "stream gauge" in metadata_df["site_type"].unique():
         attributes_df = pd.read_sql_query(
-            """SELECT * FROM streamgauge_attributes WHERE site_id IN (%s)""" % ','.join('?' * len(site_ids)),
-            conn, params=site_ids)
-        metadata_df = pd.merge(metadata_df, attributes_df, how='left', on='site_id')
+            """SELECT * FROM streamgauge_attributes WHERE site_id IN (%s)"""
+            % ",".join("?" * len(site_ids)),
+            conn,
+            params=site_ids,
+        )
+        metadata_df = pd.merge(metadata_df, attributes_df, how="left", on="site_id")
 
-    if 'groundwater well' in metadata_df['site_type'].unique():
+    if "groundwater well" in metadata_df["site_type"].unique():
         attributes_df = pd.read_sql_query(
-            """SELECT * FROM well_attributes WHERE site_id IN (%s)""" % ','.join('?' * len(site_ids)),
-            conn, params=site_ids)
-        metadata_df = pd.merge(metadata_df, attributes_df, how='left', on='site_id')
+            """SELECT * FROM well_attributes WHERE site_id IN (%s)"""
+            % ",".join("?" * len(site_ids)),
+            conn,
+            params=site_ids,
+        )
+        metadata_df = pd.merge(metadata_df, attributes_df, how="left", on="site_id")
 
-    if 'SNOTEL station' or 'SCAN station' in metadata_df['site_type'].unique():
+    if "SNOTEL station" or "SCAN station" in metadata_df["site_type"].unique():
         attributes_df = pd.read_sql_query(
-            """SELECT * FROM snotel_station_attributes WHERE site_id IN (%s)""" % ','.join('?' * len(site_ids)),
-            conn, params=site_ids)
-        metadata_df = pd.merge(metadata_df, attributes_df, how='left', on='site_id')
+            """SELECT * FROM snotel_station_attributes WHERE site_id IN (%s)"""
+            % ",".join("?" * len(site_ids)),
+            conn,
+            params=site_ids,
+        )
+        metadata_df = pd.merge(metadata_df, attributes_df, how="left", on="site_id")
 
-    if 'flux tower' in metadata_df['site_type'].unique():
+    if "flux tower" in metadata_df["site_type"].unique():
         attributes_df = pd.read_sql_query(
-            """SELECT * FROM flux_tower_attributes WHERE site_id IN (%s)""" % ','.join('?' * len(site_ids)),
-            conn, params=site_ids)
-        metadata_df = pd.merge(metadata_df, attributes_df, how='left', on='site_id')
+            """SELECT * FROM flux_tower_attributes WHERE site_id IN (%s)"""
+            % ",".join("?" * len(site_ids)),
+            conn,
+            params=site_ids,
+        )
+        metadata_df = pd.merge(metadata_df, attributes_df, how="left", on="site_id")
 
     conn.close()
     return metadata_df
 
 
-def _get_data_from_api(data_type, data_source, 
-            variable, 
-            temporal_resolution, 
-            aggregation, options):
-
+def _get_data_from_api(
+    data_type, data_source, variable, temporal_resolution, aggregation, options
+):
     options = _convert_params_to_string_dict(options)
 
-    q_params = _construct_string_from_qparams(data_type, data_source, 
-            variable, 
-            temporal_resolution, 
-            aggregation, options)
+    q_params = _construct_string_from_qparams(
+        data_type, data_source, variable, temporal_resolution, aggregation, options
+    )
 
     point_data_url = f"{HYDRODATA_URL}/api/point-data-dataframe?{q_params}"
 
@@ -304,7 +318,7 @@ def _convert_params_to_string_dict(options):
         if key == "site_networks":
             if not isinstance(value, str):
                 options[key] = str(value)
-        #Don't need below anymore?  Check with Amy D.
+        # Don't need below anymore?  Check with Amy D.
         """
         if key == "all_attributes":
             if not isinstance(value, str):
@@ -313,9 +327,7 @@ def _convert_params_to_string_dict(options):
     return options
 
 
-def _convert_strings_to_type(
-    options
-):
+def _convert_strings_to_type(options):
     """
     Converts strings to relevant types.
 
@@ -344,7 +356,7 @@ def _convert_strings_to_type(
         if key == "min_num_obs":
             if isinstance(value, str):
                 options[key] = int(value)
-        #Don't need below anymore?  Check with Amy D.
+        # Don't need below anymore?  Check with Amy D.
         """
         if key == "all_attributes":
             if isinstance(value, str):
@@ -354,10 +366,9 @@ def _convert_strings_to_type(
     return options
 
 
-def _construct_string_from_qparams(data_type, data_source, 
-            variable, 
-            temporal_resolution, 
-            aggregation, options):
+def _construct_string_from_qparams(
+    data_type, data_source, variable, temporal_resolution, aggregation, options
+):
     """
     Constructs the query parameters from the entry and options provided.
 
@@ -395,7 +406,7 @@ def get_citations(data_source, site_ids=None):
     Parameters
     ----------
     data_source : str
-        Source from which data originates. Options include: 'usgs_nwis', 'usda_nrcs', and 
+        Source from which data originates. Options include: 'usgs_nwis', 'usda_nrcs', and
         'ameriflux'.
     site_ids : list; default None
         If provided, the specific list of sites to return data DOIs for. This is only
@@ -407,26 +418,32 @@ def get_citations(data_source, site_ids=None):
         Nothing returned unless data_source == `ameriflux` and the parameter `site_ids` is provided.
     """
     try:
-        assert data_source in ['usgs_nwis', 'usda_nrcs', 'ameriflux']
+        assert data_source in ["usgs_nwis", "usda_nrcs", "ameriflux"]
     except:
         raise ValueError(
-            f"Unexpected value of data_source, {data_source}. Supported values include 'usgs_nwis', 'usda_nrcs', and 'ameriflux'")
+            f"Unexpected value of data_source, {data_source}. Supported values include 'usgs_nwis', 'usda_nrcs', and 'ameriflux'"
+        )
 
-    if data_source == 'usgs_nwis':
-        print('''Most U.S. Geological Survey (USGS) information resides in Public Domain 
+    if data_source == "usgs_nwis":
+        print(
+            """Most U.S. Geological Survey (USGS) information resides in Public Domain 
               and may be used without restriction, though they do ask that proper credit be given.
               An example credit statement would be: "(Product or data name) courtesy of the U.S. Geological Survey"
-              Source: https://www.usgs.gov/information-policies-and-instructions/acknowledging-or-crediting-usgs''')
+              Source: https://www.usgs.gov/information-policies-and-instructions/acknowledging-or-crediting-usgs"""
+        )
 
-    elif data_source == 'usda_nrcs':
-        print('''Most information presented on the USDA Web site is considered public domain information. 
+    elif data_source == "usda_nrcs":
+        print(
+            """Most information presented on the USDA Web site is considered public domain information. 
                 Public domain information may be freely distributed or copied, but use of appropriate
                 byline/photo/image credits is requested. 
                 Attribution may be cited as follows: "U.S. Department of Agriculture"
-                Source: https://www.usda.gov/policies-and-links''')
+                Source: https://www.usda.gov/policies-and-links"""
+        )
 
-    elif data_source == 'ameriflux':
-        print('''All AmeriFlux sites provided by the HydroData service follow the CC-BY-4.0 License.
+    elif data_source == "ameriflux":
+        print(
+            """All AmeriFlux sites provided by the HydroData service follow the CC-BY-4.0 License.
                 The CC-BY-4.0 license specifies that the data user is free to Share (copy and redistribute 
                 the material in any medium or format) and/or Adapt (remix, transform, and build upon the 
                 material) for any purpose.
@@ -440,7 +457,8 @@ def get_citations(data_source, site_ids=None):
                 full metadata query. Alternately, a site list can be provided to this get_citation_information
                 function to return each site-specific DOI.
             
-                Source: https://ameriflux.lbl.gov/data/data-policy/''')
+                Source: https://ameriflux.lbl.gov/data/data-policy/"""
+        )
 
     if site_ids is not None:
         # Create database connection
@@ -450,7 +468,9 @@ def get_citations(data_source, site_ids=None):
                 SELECT site_id, doi 
                 FROM sites
                 WHERE site_id IN (%s)
-                """ % ','.join('?'*len(site_ids))
+                """ % ",".join(
+            "?" * len(site_ids)
+        )
 
         df = pd.read_sql_query(query, conn, params=site_ids)
         return df

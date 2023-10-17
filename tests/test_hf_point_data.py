@@ -1,9 +1,11 @@
+"""Unit test for the /hf_point_data."""
+
+# pylint: disable=W0613,C0301,R0903
 import sys
 import os
 import io
-import pytest
-import sqlite3
 from unittest import mock
+import pytest
 import pandas as pd
 import numpy as np
 
@@ -116,7 +118,7 @@ def test_get_dataframe():
             latitude_range=(45, 46),
             longitude_range=(-110, -108),
         )
-        
+
         assert (data_df.loc[0, "0"]) == "01019000"
 
 
@@ -178,7 +180,7 @@ def test_check_inputs():
             variable="soil moisture",
             temporal_resolution="daily",
             aggregation="start-of-day",
-            depth_level=6
+            depth_level=6,
         )
 
 
