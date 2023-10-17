@@ -217,21 +217,21 @@ def get_sites(conn, data_source, variable, temporal_resolution, aggregation, **k
     param_list = [var_id]
 
     # Date start
-    if 'date_start' in kwargs:
+    if 'date_start' in kwargs and kwargs['date_start'] is not None:
         date_start_query = """ AND last_date_data_available >= ?"""
         param_list.append(kwargs['date_start'])
     else:
         date_start_query = """"""
 
     # Date end
-    if 'date_end' in kwargs:
+    if 'date_end' in kwargs and kwargs['date_end'] is not None:
         date_end_query = """ AND first_date_data_available <= ?"""
         param_list.append(kwargs['date_end'])
     else:
         date_end_query = """"""
 
     # Latitude
-    if 'latitude_range' in kwargs:
+    if 'latitude_range' in kwargs and kwargs['latitude_range'] is not None:
         lat_query = """ AND latitude BETWEEN ? AND ?"""
         param_list.append(kwargs['latitude_range'][0])
         param_list.append(kwargs['latitude_range'][1])
@@ -239,7 +239,7 @@ def get_sites(conn, data_source, variable, temporal_resolution, aggregation, **k
         lat_query = """"""
 
     # Longitude
-    if 'longitude_range' in kwargs:
+    if 'longitude_range' in kwargs and kwargs['longitude_range'] is not None:
         lon_query = """ AND longitude BETWEEN ? AND ?"""
         param_list.append(kwargs['longitude_range'][0])
         param_list.append(kwargs['longitude_range'][1])
@@ -247,7 +247,7 @@ def get_sites(conn, data_source, variable, temporal_resolution, aggregation, **k
         lon_query = """"""
 
     # Site ID
-    if 'site_ids' in kwargs:
+    if 'site_ids' in kwargs and kwargs['site_ids'] is not None:
         site_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(kwargs['site_ids']))
         for s in kwargs['site_ids']:
             param_list.append(s)
@@ -255,14 +255,14 @@ def get_sites(conn, data_source, variable, temporal_resolution, aggregation, **k
         site_query = """"""
 
     # State
-    if 'state' in kwargs:
+    if 'state' in kwargs and kwargs['state'] is not None:
         state_query = """ AND state == ?"""
         param_list.append(kwargs['state'])
     else:
         state_query = """"""
 
     # Site Networks
-    if 'site_networks' in kwargs:
+    if 'site_networks' in kwargs and kwargs['state'] is not None:
         network_site_list = get_network_site_list(data_source, variable, kwargs['site_networks'])
         network_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(network_site_list))
         for s in network_site_list:

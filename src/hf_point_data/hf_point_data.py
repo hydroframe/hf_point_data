@@ -15,7 +15,7 @@ import hf_point_data.utils as utils
 
 HYDRODATA = '/hydrodata'
 DB_PATH = f'{HYDRODATA}/national_obs/point_obs.sqlite'
-HYDRODATA_URL = os.getenv("HYDRODATA_URL", "https://hydrogen.princeton.edu")
+HYDRODATA_URL = os.getenv("HYDRODATA_URL", "https://hydro-dev-aj.princeton.edu")
 
 def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     """
@@ -203,7 +203,7 @@ def _get_data_from_api(data_type, data_source,
             temporal_resolution, 
             aggregation, options)
 
-    point_data_url = f"{HYDRODATA_URL}/api/point-data-app?{q_params}"
+    point_data_url = f"{HYDRODATA_URL}/api/point-data-dataframe?{q_params}"
 
     try:
         headers = _validate_user()
