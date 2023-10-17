@@ -133,7 +133,7 @@ def get_metadata(data_source, variable, temporal_resolution, aggregation, **kwar
             conn, params=site_ids)
         metadata_df = pd.merge(metadata_df, attributes_df, how='left', on='site_id')
 
-    if 'SNOTEL station' or 'SCAN station' in metadata_df['site_type'].unique():
+    if ('SNOTEL station' in metadata_df['site_type'].unique()) or ('SCAN station' in metadata_df['site_type'].unique()):
         attributes_df = pd.read_sql_query(
             """SELECT * FROM snotel_station_attributes WHERE site_id IN (%s)""" % ','.join('?' * len(site_ids)),
             conn, params=site_ids)
