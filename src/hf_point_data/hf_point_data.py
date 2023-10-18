@@ -485,29 +485,6 @@ def get_citations(data_source, site_ids=None):
         return df
 
 
-def _get_data_from_api(**kwargs):
-    options = kwargs
-    options = _convert_params_to_string_dict(options)
-
-    q_params = _construct_string_from_qparams(options)
-
-    point_data_url = f"{HYDRODATA_URL}/api/point-data-app?{q_params}"
-
-    try:
-        headers = _validate_user()
-        response = requests.get(point_data_url, headers=headers, timeout=180)
-        if response.status_code != 200:
-            raise ValueError(
-                f"The  {point_data_url} returned error code {response.status_code}."
-            )
-
-    except requests.exceptions.Timeout as e:
-        raise ValueError(f"The point_data_url {point_data_url} has timed out.") from e
-
-    data_df = pd.read_pickle(io.BytesIO(response.content))
-    return data_df
-
-
 def _convert_params_to_string_dict(options):
     """
     Converts types other than strings to strings.
@@ -541,73 +518,6 @@ def _convert_params_to_string_dict(options):
             if not isinstance(value, str):
                 options[key] = str(value)
     return options
-
-
-def _convert_strings_to_type(
-    depth_level,
-    latitude_range,
-    longitude_range,
-    site_ids,
-    min_num_obs,
-    return_metadata,
-    all_attributes,
-):
-    """
-    Converts strings to relevant types.
-
-    Parameters
-    ----------
-    options : dictionary
-        request options.
-    """
-
-    if isinstance(depth_level, str):
-        depth_level = int(depth_level)
-    if isinstance(latitude_range, str):
-        latitude_range = ast.literal_eval(latitude_range)
-    if isinstance(longitude_range, str):
-        longitude_range = ast.literal_eval(longitude_range)
-    if isinstance(site_ids, str):
-        site_ids = ast.literal_eval(site_ids)
-    if isinstance(min_num_obs, str):
-        min_num_obs = int(min_num_obs)
-    if isinstance(return_metadata, str):
-        return_metadata = bool(return_metadata)
-    if isinstance(all_attributes, str):
-        all_attributes = bool(all_attributes)
-
-    return (
-        depth_level,
-        latitude_range,
-        longitude_range,
-        site_ids,
-        min_num_obs,
-        return_metadata,
-        all_attributes,
-    )
-
-
-def _construct_string_from_qparams(options):
-    """
-    Constructs the query parameters from the entry and options provided.
-
-    Parameters
-    ----------
-    entry : hydroframe.data_catalog.data_model_access.ModelTableRow
-        variable to be downloaded.
-    options : dictionary
-        datast to which the variable belongs.
-
-    Returns
-    -------
-    data : numpy array
-        the requested data.
-    """
-    string_parts = [
-        f"{name}={value}" for name, value in options.items() if value is not None
-    ]
-    result_string = "&".join(string_parts)
-    return result_string
 
 
 def _validate_user():
