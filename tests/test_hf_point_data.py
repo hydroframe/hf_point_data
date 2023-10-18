@@ -145,6 +145,7 @@ def test_get_meta_dataframe():
 def test_check_inputs():
     """Confirm utils.check_inputs fails for expected cases."""
     # Parameter provided for variable not in supported list (typo).
+    hf_point_data.HYDRODATA = "/hydrodata"
     with pytest.raises(Exception):
         utils.check_inputs(
             data_source="usgs_nwis",
