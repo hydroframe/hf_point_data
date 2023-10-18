@@ -187,16 +187,20 @@ def test_filter_min_num_obs():
     """Test functionality for filtering DataFrame on minimum non-NaN values."""
     df = pd.DataFrame(
         {
-            "site_id": ["101", "102", "103", "104", "105"],
-            "date1": [1, 5, 3, 4, 8],
-            "date2": [np.nan, 4, 2, 9, 4],
-            "date3": [np.nan, 9, 2, np.nan, 9],
+            "site1": [1, 5, 3, 4],
+            "site2": [np.nan, 4, 2, 9],
+            "site3": [np.nan, 9, 2, np.nan],
         }
     )
 
-    assert len(utils.filter_min_num_obs(df, 1)) == 5
-    assert len(utils.filter_min_num_obs(df, 2)) == 4
-    assert len(utils.filter_min_num_obs(df, 3)) == 3
+    df1 = utils.filter_min_num_obs(df, 1)
+    assert list(df1.columns) == ['site1', 'site2', 'site3']
+    df2 = utils.filter_min_num_obs(df, 2)
+    assert list(df2.columns) == ['site1', 'site2', 'site3']
+    df3 = utils.filter_min_num_obs(df, 3)
+    assert list(df3.columns) == ['site1', 'site2']
+    df4 = utils.filter_min_num_obs(df, 4)
+    assert list(df4.columns) == ['site1']
 
 
 def test_no_sites_error_message():
@@ -698,6 +702,9 @@ def test_get_data_site_filter():
 
 def test_site_networks_filter():
     """Test for using site_networks filter"""
+    utils.NETWORK_LISTS_PATH = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../src/hf_point_data/network_lists")
+    )
     data_df = hf_point_data.get_data(
         "usgs_nwis",
         "streamflow",
@@ -740,7 +747,7 @@ def test_get_data_min_num_obs_filter():
         site_ids=['01377500', '01378500', '01445000'],
         min_num_obs=5
     )
-    assert list(df.columns == ['date', '01377500', '01378500'])
+    assert list(df.columns) == ['date', '01377500', '01378500']
 
     df = hf_point_data.get_data(
         "usgs_nwis",
@@ -752,7 +759,7 @@ def test_get_data_min_num_obs_filter():
         site_ids=['01377500', '01378500', '01445000'],
         min_num_obs=1
     )
-    assert list(df.columns == ['date', '01377500', '01378500'])
+    assert list(df.columns) == ['date', '01377500', '01378500']
 
     # If no min_num_obs filter supplied, all three sites returned
     df = hf_point_data.get_data(
@@ -764,7 +771,7 @@ def test_get_data_min_num_obs_filter():
         date_end="2002-01-05",
         site_ids=['01377500', '01378500', '01445000']
     )
-    assert list(df.columns == ['date', '01377500', '01378500', '01445000'])
+    assert list(df.columns) == ['date', '01377500', '01378500', '01445000']
 
 
 if __name__ == "__main__":
