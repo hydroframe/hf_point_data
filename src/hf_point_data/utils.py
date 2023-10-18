@@ -418,12 +418,8 @@ def filter_min_num_obs(df, min_num_obs):
     """
     dfc = df.copy()
 
-    # count number of non-na observations
-    dfc['num_obs'] = dfc.count(axis=1) - 1
-
-    # filter based on this field
-    df_filtered = dfc[dfc['num_obs'] >= min_num_obs]
-    df_filtered.drop(columns=['num_obs'], inplace=True)
+    # drop columns with too many NaN values
+    df_filtered = dfc.dropna(thresh=min_num_obs, axis=1)
 
     return df_filtered
 

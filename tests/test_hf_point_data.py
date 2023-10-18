@@ -10,11 +10,8 @@ import pandas as pd
 import numpy as np
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from hf_point_data import hf_point_data, utils  # noqa
-
-HYDRODATA = "test_data/hydrodata"
 
 
 class MockResponseMetadata:
@@ -201,18 +198,572 @@ def test_filter_min_num_obs():
     assert len(utils.filter_min_num_obs(df, 3)) == 3
 
 
-# def test_get_network_site_list():
-#     """Confirm expected number of sites in each network list."""
-#     assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['gagesii'])) == 9067
-#     assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['gagesii_reference'])) == 1947
-#     assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['hcdn2009'])) == 704
-#     assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['camels'])) == 671
-#     assert len(utils.get_network_site_list('usgs_nwis', 'wtd', ['climate_response_network'])) == 718
+def test_no_sites_error_message():
+    """Test that error gets raised if not sites fit filters"""
+    with pytest.raises(Exception):
+        df = hf_point_data.get_data(
+            "usgs_nwis",
+            "wtd",
+            "hourly",
+            "average",
+            date_start="2002-01-01",
+            date_end="2002-01-05",
+            latitude_range=(49, 50),
+            longitude_range=(-75, -74)
+        )
 
 
-# def test_get_network_site_list_intersect():
-#     """Confirm function doesn't return duplicate site IDs if multiple networks listed."""
-#     assert len(utils.get_network_site_list('usgs_nwis', 'streamflow', ['gagesii', 'gagesii_reference'])) == 1947
+def test_get_data_streamflow_daily():
+    """Test for daily streamflow data"""
+    df = hf_point_data.get_data(
+        "usgs_nwis",
+        "streamflow",
+        "daily",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        latitude_range=(47, 50),
+        longitude_range=(-75, -50)
+    )
+    assert len(df) == 5
+    assert '01011000' in df.columns
+
+
+def test_get_data_streamflow_hourly():
+    """Test for hourly streamflow data"""
+    df = hf_point_data.get_data(
+        "usgs_nwis",
+        "streamflow",
+        "hourly",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        latitude_range=(45, 50),
+        longitude_range=(-75, -50)
+    )
+    assert len(df) == 97
+    assert '01011000' in df.columns
+
+
+def test_get_data_wtd_daily():
+    """Test for daily wtd data"""
+    df = hf_point_data.get_data(
+        "usgs_nwis",
+        "wtd",
+        "daily",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        latitude_range=(45, 50),
+        longitude_range=(-75, -50)
+    )
+    assert len(df) == 5
+    assert '453629068531801' in df.columns
+
+
+def test_get_data_wtd_hourly():
+    """Test for hourly wtd data"""
+    df = hf_point_data.get_data(
+        "usgs_nwis",
+        "wtd",
+        "hourly",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        latitude_range=(30, 40),
+        longitude_range=(-120, -110)
+    )
+    assert len(df) == 97
+    assert '343409111511101' in df.columns
+
+
+def test_get_data_wtd_instantaneous():
+    """Test for instantaneous wtd data"""
+    df = hf_point_data.get_data(
+        "usgs_nwis",
+        "wtd",
+        "instantaneous",
+        "instantaneous",
+        date_start="2002-01-01",
+        date_end="2002-01-01",
+        latitude_range=(30, 35),
+        longitude_range=(-120, -115)
+    )
+    assert len(df) >= 300
+    assert '323709080324809' in list(df['site_id'])
+    assert set(list(df['date'])) == {'2002-01-01'}
+
+
+def test_get_data_swe_daily():
+    """Test for daily swe data"""
+    df = hf_point_data.get_data(
+        "usda_nrcs",
+        "swe",
+        "daily",
+        "start-of-day",
+        date_start="2022-01-01",
+        date_end="2022-01-04",
+        latitude_range=(39, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df) == 4
+    assert '340:NV:SNTL' in df.columns
+
+
+def test_get_data_precipitation_daily():
+    """Tests for daily precipitation data"""
+    accumulated_df = hf_point_data.get_data(
+        "usda_nrcs",
+        "precipitation",
+        "daily",
+        "accumulated",
+        date_start="2022-01-01",
+        date_end="2022-01-04",
+        latitude_range=(39, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(accumulated_df) == 4
+    assert '340:NV:SNTL' in accumulated_df.columns
+
+    total_df = hf_point_data.get_data(
+        "usda_nrcs",
+        "precipitation",
+        "daily",
+        "total",
+        date_start="2022-01-01",
+        date_end="2022-01-04",
+        latitude_range=(39, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(total_df) == 4
+    assert '340:NV:SNTL' in total_df.columns
+    assert (accumulated_df['340:NV:SNTL'] > total_df['340:NV:SNTL']).all() == True
+
+    total_adj_df = hf_point_data.get_data(
+        "usda_nrcs",
+        "precipitation",
+        "daily",
+        "total, snow-adjusted",
+        date_start="2022-01-01",
+        date_end="2022-01-04",
+        latitude_range=(39, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(total_adj_df) == 4
+    assert '340:NV:SNTL' in total_adj_df.columns
+    assert (total_adj_df['340:NV:SNTL'] >= total_df['340:NV:SNTL']).all() == True
+
+
+def test_get_data_temperature_daily():
+    """Tests for daily temperature data"""
+    min_df = hf_point_data.get_data(
+        "usda_nrcs",
+        "temperature",
+        "daily",
+        "minimum",
+        date_start="2022-01-01",
+        date_end="2022-01-04",
+        latitude_range=(39, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(min_df) == 4
+    assert '340:NV:SNTL' in min_df.columns
+
+    max_df = hf_point_data.get_data(
+        "usda_nrcs",
+        "temperature",
+        "daily",
+        "maximum",
+        date_start="2022-01-01",
+        date_end="2022-01-04",
+        latitude_range=(39, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(max_df) == 4
+    assert '340:NV:SNTL' in max_df.columns
+
+    mean_df = hf_point_data.get_data(
+        "usda_nrcs",
+        "temperature",
+        "daily",
+        "average",
+        date_start="2022-01-01",
+        date_end="2022-01-04",
+        latitude_range=(39, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(mean_df) == 4
+    assert '340:NV:SNTL' in mean_df.columns
+
+    assert (min_df['340:NV:SNTL'] <= max_df['340:NV:SNTL']).all() == True
+    assert (min_df['340:NV:SNTL'] <= mean_df['340:NV:SNTL']).all() == True
+    assert (mean_df['340:NV:SNTL'] <= max_df['340:NV:SNTL']).all() == True
+
+
+def test_get_soil_moisture_fail():
+    """Make sure failure if required depth_level parameter not supplied."""
+    with pytest.raises(Exception):
+        df = hf_point_data.get_data(
+            "usda_nrcs",
+            "soil moisture",
+            "daily",
+            "start-of-day",
+            date_start="2002-01-01",
+            date_end="2002-01-05",
+            latitude_range=(49, 50),
+            longitude_range=(-75, -74)
+        )
+
+
+def test_get_data_soil_moisture_daily():
+    """Tests for daily soil moisture data"""
+    df_2 = hf_point_data.get_data(
+        "usda_nrcs",
+        "soil moisture",
+        "daily",
+        "start-of-day",
+        depth_level=2,
+        date_start="2022-01-01",
+        date_end="2022-01-03",
+        latitude_range=(39, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df_2) == 3
+    assert '1242:NV:SNTL' in df_2.columns
+
+    df_4 = hf_point_data.get_data(
+        "usda_nrcs",
+        "soil moisture",
+        "daily",
+        "start-of-day",
+        depth_level=4,
+        date_start="2022-01-01",
+        date_end="2022-01-03",
+        latitude_range=(30, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df_4) == 3
+    assert '2189:CA:SCAN' in df_4.columns
+
+    df_8 = hf_point_data.get_data(
+        "usda_nrcs",
+        "soil moisture",
+        "daily",
+        "start-of-day",
+        depth_level=8,
+        date_start="2022-01-01",
+        date_end="2022-01-03",
+        latitude_range=(39, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df_8) == 3
+    assert '1242:NV:SNTL' in df_8.columns
+
+    df_20 = hf_point_data.get_data(
+        "usda_nrcs",
+        "soil moisture",
+        "daily",
+        "start-of-day",
+        depth_level=20,
+        date_start="2022-01-01",
+        date_end="2022-01-03",
+        latitude_range=(39, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df_20) == 3
+    assert '1242:NV:SNTL' in df_20.columns
+
+    df_40 = hf_point_data.get_data(
+        "usda_nrcs",
+        "soil moisture",
+        "daily",
+        "start-of-day",
+        depth_level=40,
+        date_start="2022-01-01",
+        date_end="2022-01-03",
+        latitude_range=(30, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df_40) == 3
+    assert '2189:CA:SCAN' in df_40.columns
+
+
+def test_get_data_latent_heat_flux():
+    """Tests for hourly latent heat flux data"""
+    df = hf_point_data.get_data(
+        "ameriflux",
+        "latent heat flux",
+        "hourly",
+        "total",
+        date_start="2022-01-01",
+        date_end="2022-01-02",
+        latitude_range=(30, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df) == 25
+    assert 'US-xSJ' in df.columns
+
+
+def test_get_data_sensible_heat_flux():
+    """Tests for hourly sensible heat flux data"""
+    df = hf_point_data.get_data(
+        "ameriflux",
+        "sensible heat flux",
+        "hourly",
+        "total",
+        date_start="2022-01-01",
+        date_end="2022-01-02",
+        latitude_range=(30, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df) == 25
+    assert 'US-xSJ' in df.columns
+
+
+def test_get_data_sradiation():
+    """Tests for hourly shortwave radiation data"""
+    df = hf_point_data.get_data(
+        "ameriflux",
+        "shortwave radiation",
+        "hourly",
+        "average",
+        date_start="2022-01-01",
+        date_end="2022-01-02",
+        latitude_range=(30, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df) == 25
+    assert 'US-xSJ' in df.columns
+
+
+def test_get_data_lradiation():
+    """Tests for hourly longwave radiation data"""
+    df = hf_point_data.get_data(
+        "ameriflux",
+        "longwave radiation",
+        "hourly",
+        "average",
+        date_start="2022-01-01",
+        date_end="2022-01-02",
+        latitude_range=(30, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df) == 25
+    assert 'US-xSJ' in df.columns
+
+
+def test_get_data_vpd():
+    """Tests for hourly vapor pressure deficit data"""
+    df = hf_point_data.get_data(
+        "ameriflux",
+        "vapor pressure deficit",
+        "hourly",
+        "average",
+        date_start="2022-01-01",
+        date_end="2022-01-02",
+        latitude_range=(30, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df) == 25
+    assert 'US-xSJ' in df.columns
+
+
+def test_get_data_temperature_fluxnet():
+    """Tests for hourly temperature data"""
+    df = hf_point_data.get_data(
+        "ameriflux",
+        "temperature",
+        "hourly",
+        "average",
+        date_start="2022-01-01",
+        date_end="2022-01-02",
+        latitude_range=(30, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df) == 25
+    assert 'US-xSJ' in df.columns
+
+
+def test_get_data_wind_speed():
+    """Tests for hourly wind speed data"""
+    df = hf_point_data.get_data(
+        "ameriflux",
+        "wind speed",
+        "hourly",
+        "average",
+        date_start="2022-01-01",
+        date_end="2022-01-02",
+        latitude_range=(30, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(df) == 25
+    assert 'US-xSJ' in df.columns
+
+
+def test_get_metadata_streamflow():
+    """Test for streamflow metadata"""
+    metadata_df = hf_point_data.get_metadata(
+        "usgs_nwis",
+        "streamflow",
+        "daily",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        latitude_range=(47, 50),
+        longitude_range=(-75, -50)
+    )
+    assert len(metadata_df) == 4
+    assert '01011000' in list(metadata_df['site_id'])
+
+
+def test_get_metadata_wtd():
+    """Test for wtd metadata"""
+    metadata_df = hf_point_data.get_metadata(
+        "usgs_nwis",
+        "wtd",
+        "daily",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        latitude_range=(47, 50),
+        longitude_range=(-75, -50)
+    )
+    assert len(metadata_df) == 1
+    assert '471457068353001' in list(metadata_df['site_id'])
+
+
+def test_get_metadata_swe():
+    """Test for swe metadata"""
+    metadata_df = hf_point_data.get_metadata(
+        "usda_nrcs",
+        "swe",
+        "daily",
+        "start-of-day",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        latitude_range=(39, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(metadata_df) == 3
+    assert '340:NV:SNTL' in list(metadata_df['site_id'])
+
+
+def test_get_metadata_flux():
+    """Test for ameriflux metadata"""
+    metadata_df = hf_point_data.get_metadata(
+        "ameriflux",
+        "latent heat flux",
+        "hourly",
+        "total",
+        date_start="2022-01-01",
+        date_end="2022-01-02",
+        latitude_range=(30, 40),
+        longitude_range=(-120, -119)
+    )
+    assert len(metadata_df) == 3
+    assert 'US-xSJ' in list(metadata_df['site_id'])
+
+
+def test_get_data_state_filter():
+    """Test for using state filter"""
+    df = hf_point_data.get_data(
+        "usgs_nwis",
+        "streamflow",
+        "daily",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        state='ME'
+    )
+    assert len(df) == 5
+    assert '01011000' in df.columns
+    assert len(df.columns) >= 64
+
+
+def test_get_data_site_filter():
+    """Test for using site_ids filter"""
+    df = hf_point_data.get_data(
+        "usgs_nwis",
+        "streamflow",
+        "daily",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        site_ids=['01011000', '01013500']
+    )
+    assert len(df) == 5
+    assert list(df.columns == ['date', '01011000', '01013500'])
+
+
+def test_site_networks_filter():
+    """Test for using site_networks filter"""
+    data_df = hf_point_data.get_data(
+        "usgs_nwis",
+        "streamflow",
+        "daily",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        state='NJ',
+        latitude_range=(40, 41),
+        longitude_range=(-75, -74),
+        site_networks=['gagesii']
+    )
+    assert len(data_df) == 5
+    assert '01377500' in data_df.columns
+
+    metadata_df = hf_point_data.get_metadata(
+        "usgs_nwis",
+        "streamflow",
+        "daily",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        state='NJ',
+        latitude_range=(40, 41),
+        longitude_range=(-75, -74),
+        site_networks=['gagesii']
+    )
+    assert len(metadata_df) == 60
+
+
+def test_get_data_min_num_obs_filter():
+    """Test for using min_num_obs filter"""
+    df = hf_point_data.get_data(
+        "usgs_nwis",
+        "streamflow",
+        "daily",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        site_ids=['01377500', '01378500', '01445000'],
+        min_num_obs=5
+    )
+    assert list(df.columns == ['date', '01377500', '01378500'])
+
+    df = hf_point_data.get_data(
+        "usgs_nwis",
+        "streamflow",
+        "daily",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        site_ids=['01377500', '01378500', '01445000'],
+        min_num_obs=1
+    )
+    assert list(df.columns == ['date', '01377500', '01378500'])
+
+    # If no min_num_obs filter supplied, all three sites returned
+    df = hf_point_data.get_data(
+        "usgs_nwis",
+        "streamflow",
+        "daily",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        site_ids=['01377500', '01378500', '01445000']
+    )
+    assert list(df.columns == ['date', '01377500', '01378500', '01445000'])
 
 
 if __name__ == "__main__":
