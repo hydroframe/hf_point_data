@@ -10,6 +10,8 @@ import datetime as dt
 import numpy as np
 import xarray as xr
 
+NETWORK_LISTS_PATH = 'network_lists'
+
 
 def check_inputs(data_source, variable, temporal_resolution, aggregation, **kwargs):
     """
@@ -320,7 +322,7 @@ def get_network_site_list(data_source, variable, site_networks):
     for network in site_networks:
         try:
             assert network in network_options[data_source][variable]
-            df = pd.read_csv(f'network_lists/{data_source}/{variable}/{network}.csv',
+            df = pd.read_csv(f'{NETWORK_LISTS_PATH}/{data_source}/{variable}/{network}.csv',
                              dtype=str, header=None, names=['site_id'])
             site_list += list(df['site_id'])
         except:
