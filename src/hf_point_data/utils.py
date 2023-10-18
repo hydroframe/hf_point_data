@@ -506,7 +506,7 @@ def get_data_nc(site_list, var_id, **kwargs):
     print('data collected.')
 
     data_df = convert_to_pandas(ds)
-    if 'min_num_obs' in kwargs:
+    if 'min_num_obs' in kwargs and kwargs['min_num_obs'] is not None:
         return filter_min_num_obs(data_df, kwargs['min_num_obs'])
     else:
         return data_df
