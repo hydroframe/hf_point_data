@@ -80,7 +80,6 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
 
     options = kwargs
     run_remote = not os.path.exists(HYDRODATA)
-    run_remote = RUN_REMOTE
 
     if run_remote:
         data_df = _get_data_from_api(
