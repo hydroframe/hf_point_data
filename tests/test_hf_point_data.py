@@ -618,6 +618,7 @@ def test_get_metadata_streamflow():
         longitude_range=(-75, -50)
     )
     assert len(metadata_df) == 4
+    assert len(metadata_df.columns) == 23
     assert '01011000' in list(metadata_df['site_id'])
 
 
@@ -634,6 +635,7 @@ def test_get_metadata_wtd():
         longitude_range=(-75, -50)
     )
     assert len(metadata_df) == 1
+    assert len(metadata_df.columns) == 25
     assert '471457068353001' in list(metadata_df['site_id'])
 
 
@@ -650,6 +652,7 @@ def test_get_metadata_swe():
         longitude_range=(-120, -119)
     )
     assert len(metadata_df) == 3
+    assert len(metadata_df.columns) == 20
     assert '340:NV:SNTL' in list(metadata_df['site_id'])
 
 
@@ -666,6 +669,7 @@ def test_get_metadata_flux():
         longitude_range=(-120, -119)
     )
     assert len(metadata_df) == 3
+    assert len(metadata_df.columns) == 37
     assert 'US-xSJ' in list(metadata_df['site_id'])
 
 

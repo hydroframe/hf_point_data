@@ -179,7 +179,12 @@ def get_metadata(data_source, variable, temporal_resolution, aggregation, **kwar
 
     if "stream gauge" in metadata_df["site_type"].unique():
         attributes_df = pd.read_sql_query(
-            """SELECT * FROM streamgauge_attributes WHERE site_id IN (%s)"""
+            """SELECT site_id, conus1_x, conus1_y, conus2_x, conus2_y,
+                      gages_drainage_sqkm AS gagesii_drainage_area,
+                      class AS gagesii_class,
+                      site_elevation_meters AS gagesii_site_elevation,
+                      drain_area_va AS usgs_drainage_area
+               FROM streamgauge_attributes WHERE site_id IN (%s)"""
             % ",".join("?" * len(site_ids)),
             conn,
             params=site_ids,
@@ -188,7 +193,14 @@ def get_metadata(data_source, variable, temporal_resolution, aggregation, **kwar
 
     if "groundwater well" in metadata_df["site_type"].unique():
         attributes_df = pd.read_sql_query(
-            """SELECT * FROM well_attributes WHERE site_id IN (%s)"""
+            """SELECT site_id, conus1_x, conus1_y, conus2_x, conus2_y,
+                      nat_aqfr_cd AS usgs_nat_aqfr_cd,
+                      aqfr_cd AS usgs_aqfr_cd,
+                      aqfr_type_cd AS usgs_aqfr_type_cd,
+                      well_depth_va AS usgs_well_depth,
+                      hole_depth_va AS usgs_hole_depth,
+                      depth_src_cd AS usgs_hole_depth_src_cd
+               FROM well_attributes WHERE site_id IN (%s)"""
             % ",".join("?" * len(site_ids)),
             conn,
             params=site_ids,
@@ -197,7 +209,9 @@ def get_metadata(data_source, variable, temporal_resolution, aggregation, **kwar
 
     if ('SNOTEL station' in metadata_df['site_type'].unique()) or ('SCAN station' in metadata_df['site_type'].unique()):
         attributes_df = pd.read_sql_query(
-            """SELECT * FROM snotel_station_attributes WHERE site_id IN (%s)"""
+            """SELECT site_id, conus1_x, conus1_y, conus2_x, conus2_y,
+                      elevation AS usda_elevation
+               FROM snotel_station_attributes WHERE site_id IN (%s)"""
             % ",".join("?" * len(site_ids)),
             conn,
             params=site_ids,
@@ -206,7 +220,26 @@ def get_metadata(data_source, variable, temporal_resolution, aggregation, **kwar
 
     if "flux tower" in metadata_df["site_type"].unique():
         attributes_df = pd.read_sql_query(
-            """SELECT * FROM flux_tower_attributes WHERE site_id IN (%s)"""
+            """SELECT site_id, conus1_x, conus1_y, conus2_x, conus2_y,
+                      site_description AS ameriflux_site_description,
+                      elevation AS ameriflux_elevation,
+                      tower_type AS ameriflux_tower_type,
+                      igbp AS ameriflux_igbp,
+                      terrain AS ameriflux_terrain,
+                      site_snow_cover_days AS ameriflux_site_snow_cover_days,
+                      climate_koeppen AS ameriflux_climate_koeppen,
+                      mean_annual_temp AS ameriflux_mean_annual_temp,
+                      mean_annual_precip AS ameriflux_mean_annual_precip,
+                      team_member_name AS ameriflux_team_member_name,
+                      team_member_role AS ameriflux_team_member_role,
+                      team_member_email AS ameriflux_team_member_email,
+                      team_member_institution AS ameriflux_team_member_institution,
+                      site_funding AS ameriflux_site_funding,
+                      acknowledgement AS ameriflux_acknowledgement,
+                      acknowledgement_comment AS ameriflux_acknowledgement_comment,
+                      doi_citation AS ameriflux_doi_citation,
+                      alternate_url AS ameriflux_alternate_url
+               FROM flux_tower_attributes WHERE site_id IN (%s)"""
             % ",".join("?" * len(site_ids)),
             conn,
             params=site_ids,
