@@ -11,7 +11,7 @@ import numpy as np
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from hf_point_data import hf_point_data, utils  # noqa
+from hf_point_data import hf_point_data  # noqa
 
 
 class MockResponseMetadata:
@@ -147,7 +147,7 @@ def test_check_inputs():
     # Parameter provided for variable not in supported list (typo).
     hf_point_data.HYDRODATA = "/hydrodata"
     with pytest.raises(Exception):
-        utils.check_inputs(
+        hf_point_data._check_inputs(
             data_source="usgs_nwis",
             variable="steamflow",
             temporal_resolution="daily",
@@ -156,7 +156,7 @@ def test_check_inputs():
 
     # Parameter provided for temporal_resolution not in supported list.
     with pytest.raises(Exception):
-        utils.check_inputs(
+        hf_point_data._check_inputs(
             data_source="usgs_nwis",
             variable="streamflow",
             temporal_resolution="monthly",
@@ -165,7 +165,7 @@ def test_check_inputs():
 
     # Variable requested is soil moisture but no depth level provided.
     with pytest.raises(Exception):
-        utils.check_inputs(
+        hf_point_data._check_inputs(
             data_source="usda_nrcs",
             variable="soil moisture",
             temporal_resolution="daily",
@@ -174,7 +174,7 @@ def test_check_inputs():
 
     # Variable requested is soil moisture with unsupported depth level provided.
     with pytest.raises(Exception):
-        utils.check_inputs(
+        hf_point_data._check_inputs(
             data_source="usda_nrcs",
             variable="soil moisture",
             temporal_resolution="daily",
@@ -193,13 +193,13 @@ def test_filter_min_num_obs():
         }
     )
 
-    df1 = utils.filter_min_num_obs(df, 1)
+    df1 = hf_point_data._filter_min_num_obs(df, 1)
     assert list(df1.columns) == ['site1', 'site2', 'site3']
-    df2 = utils.filter_min_num_obs(df, 2)
+    df2 = hf_point_data._filter_min_num_obs(df, 2)
     assert list(df2.columns) == ['site1', 'site2', 'site3']
-    df3 = utils.filter_min_num_obs(df, 3)
+    df3 = hf_point_data._filter_min_num_obs(df, 3)
     assert list(df3.columns) == ['site1', 'site2']
-    df4 = utils.filter_min_num_obs(df, 4)
+    df4 = hf_point_data._filter_min_num_obs(df, 4)
     assert list(df4.columns) == ['site1']
 
 
@@ -706,7 +706,7 @@ def test_get_data_site_filter():
 
 def test_site_networks_filter():
     """Test for using site_networks filter"""
-    utils.NETWORK_LISTS_PATH = os.path.abspath(
+    hf_point_data.NETWORK_LISTS_PATH = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "../src/hf_point_data/network_lists")
     )
     data_df = hf_point_data.get_data(
