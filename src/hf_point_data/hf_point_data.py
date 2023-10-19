@@ -229,7 +229,7 @@ def _get_data_from_api(
         response = requests.get(point_data_url, headers=headers, timeout=180)
         if response.status_code != 200:
             raise ValueError(
-                f"The  {point_data_url} returned error code {response.status_code}."
+                f"The  {point_data_url} returned error code {response.status_code} with message {response.content}."
             )
 
     except requests.exceptions.Timeout as e:
@@ -245,7 +245,7 @@ def _validate_user():
     response = requests.get(url_security, headers=None, timeout=15)
     if not response.status_code == 200:
         raise ValueError(
-            f"No registered PIN for email '{email}' and PIN {pin}. See documentation to register with a URL."
+            f"The  {url_security} returned error code {response.status_code} with message {response.content}. User may need register their email and pin. See documentation to register with a URL."
         )
     json_string = response.content.decode("utf-8")
     jwt_json = json.loads(json_string)
