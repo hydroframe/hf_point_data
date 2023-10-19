@@ -18,7 +18,6 @@ DB_PATH = f"{HYDRODATA}/national_obs/point_obs.sqlite"
 HYDRODATA_URL = os.getenv("HYDRODATA_URL", "https://hydro-dev-aj.princeton.edu")
 NETWORK_LISTS_PATH = 'network_lists'
 
-
 def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     """
     Collect observations data into a Pandas DataFrame.
@@ -81,6 +80,7 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
 
     options = kwargs
     run_remote = not os.path.exists(HYDRODATA)
+    run_remote = RUN_REMOTE
 
     if run_remote:
         data_df = _get_data_from_api(
@@ -266,7 +266,7 @@ def _get_data_from_api(
         response = requests.get(point_data_url, headers=headers, timeout=180)
         if response.status_code != 200:
             raise ValueError(
-                f"The  {point_data_url} returned error code {response.status_code}."
+                f"The  {point_data_url} returned error code {response.status_code} with message {response.content}."
             )
 
     except requests.exceptions.Timeout as e:
@@ -282,7 +282,7 @@ def _validate_user():
     response = requests.get(url_security, headers=None, timeout=15)
     if not response.status_code == 200:
         raise ValueError(
-            f"No registered PIN for email '{email}' and PIN {pin}. See documentation to register with a URL."
+            f"The  {url_security} returned error code {response.status_code} with message {response.content}. User may need register their email and pin. See documentation to register with a URL."
         )
     json_string = response.content.decode("utf-8")
     jwt_json = json.loads(json_string)
@@ -559,7 +559,7 @@ def _validate_user():
     response = requests.get(url_security, headers=None, timeout=15)
     if not response.status_code == 200:
         raise ValueError(
-            f"No registered PIN for email '{email}' and PIN {pin}. See documentation to register with a URL."
+            f"The  {url_security} returned error code {response.status_code} with message {response.content}.  The email '{email}' may not be registered. See documentation to register with an email and pin."
         )
     json_string = response.content.decode("utf-8")
     jwt_json = json.loads(json_string)
@@ -1138,7 +1138,7 @@ def _get_data_sql(conn, var_id, **kwargs):
     #   pumping_status == '1' --> Static (not pumping)
     #   pumping_status == 'P' --> Pumping
     #   pumping_status == '' --> unknown (not reported)
-    if 'min_num_obs' not in kwargs:
+    if 'min_num_obs' not in kwargs or kwargs['min_num_obs'] is None:
         min_num_obs = 1
     else:
         min_num_obs = kwargs['min_num_obs']
