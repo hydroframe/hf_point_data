@@ -706,9 +706,6 @@ def test_get_data_site_filter():
 
 def test_site_networks_filter():
     """Test for using site_networks filter"""
-    hf_point_data.NETWORK_LISTS_PATH = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "../src/hf_point_data/network_lists")
-    )
     data_df = hf_point_data.get_data(
         "usgs_nwis",
         "streamflow",
