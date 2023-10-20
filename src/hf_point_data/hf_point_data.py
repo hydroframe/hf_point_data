@@ -951,7 +951,7 @@ def _get_sites(conn, data_source, variable, temporal_resolution, aggregation, *a
         state_query = """"""
 
     # Site Networks
-    if 'site_networks' in options and options['state'] is not None:
+    if 'site_networks' in options and options['site_networks'] is not None:
         network_site_list = _get_network_site_list(data_source, variable, options['site_networks'])
         network_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(network_site_list))
         for s in network_site_list:
