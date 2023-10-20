@@ -18,7 +18,7 @@ DB_PATH = f"{HYDRODATA}/national_obs/point_obs.sqlite"
 HYDRODATA_URL = os.getenv("HYDRODATA_URL", "https://hydro-dev-aj.princeton.edu")
 NETWORK_LISTS_PATH = f"/{HYDRODATA}/national_obs/tools/network_lists"
 
-def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
+def get_data(data_source, variable, temporal_resolution, aggregation, *args, **kwargs):
     """
     Collect observations data into a Pandas DataFrame.
 
@@ -47,26 +47,33 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
         Additional information specifying the aggregation method for the variable to be returned.
         Options include descriptors such as 'average' and 'total'. Please see the README documentation
         for allowable combinations with `variable`.
-    **depth_level : int
+    args :
+        Optional positional parameters that must be a dict with filter options.
+    kwargs :
+        Supports multiple named parameters with filter option values.
+
+    Optional Parameters
+    --------------------
+    depth_level : int
         Depth level in inches at which the measurement is taken. Necessary for `variable` = 'soil moisture'.
-    **date_start : str; default=None
+    date_start : str; default=None
         'YYYY-MM-DD' date indicating beginning of time range.
-    **date_end : str; default=None
+    date_end : str; default=None
         'YYYY-MM-DD' date indicating end of time range.
-    **latitude_range : tuple; default=None
+    latitude_range : tuple; default=None
         Latitude range bounds for the geographic domain; lesser value is provided first.
-    **longitude_range : tuple; default=None
+    longitude_range : tuple; default=None
         Longitude range bounds for the geographic domain; lesser value is provided first.
-    **site_ids : list; default=None
+    site_ids : list; default=None
         List of desired (string) site identifiers.
-    **state : str; default=None
+    state : str; default=None
         Two-letter postal code state abbreviation.
-    **site_networks: list
+    site_networks: list
         List of names of site networks. Can be a list with a single network name.
         Each network must have matching .csv file with a list of site ID values that comprise
         the network. This .csv file must be located under network_lists/{data_source}/{variable}
         in the package directory and named as 'network_name'.csv. Eg: `site_networks=['gagesii']`
-    **min_num_obs : int; default=1
+    min_num_obs : int; default=1
         Value for the minimum number of observations desired for a site to have.
 
     Returns
@@ -78,7 +85,11 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
         defined geographic and/or date range.
     """
 
-    options = kwargs
+    if len(args) > 0 and isinstance(args[0], dict):
+        options = args[0]
+    else:
+        options = kwargs
+
     run_remote = not os.path.exists(HYDRODATA)
 
     if run_remote:
@@ -100,17 +111,17 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
 
     # Validation checks on inputs
     _check_inputs(
-        data_source, variable, temporal_resolution, aggregation, **kwargs
+        data_source, variable, temporal_resolution, aggregation, *args, **kwargs
     )
 
     # Get associated variable IDs for requested data types and time periods
     var_id = _get_var_id(
-        conn, data_source, variable, temporal_resolution, aggregation, **kwargs
+        conn, data_source, variable, temporal_resolution, aggregation, *args, **kwargs
     )
 
     # Get site list
     sites_df = _get_sites(
-        conn, data_source, variable, temporal_resolution, aggregation, **kwargs
+        conn, data_source, variable, temporal_resolution, aggregation, *args, **kwargs
     )
 
     if len(sites_df) == 0:
@@ -120,24 +131,67 @@ def get_data(data_source, variable, temporal_resolution, aggregation, **kwargs):
     site_list = list(sites_df["site_id"])
 
     if (var_id in (1, 2, 3, 4)) | (var_id in range(6, 25)):
-        data_df = _get_data_nc(site_list, var_id, **kwargs)
+        data_df = _get_data_nc(site_list, var_id, *args, **kwargs)
 
     elif var_id == 5:
-        data_df = _get_data_sql(conn, var_id, **kwargs)
+        data_df = _get_data_sql(conn, var_id, *args, **kwargs)
 
     conn.close()
 
     return data_df.reset_index().drop("index", axis=1)
 
 
-def get_metadata(data_source, variable, temporal_resolution, aggregation, **kwargs):
+def get_metadata(data_source, variable, temporal_resolution, aggregation, *args, **kwargs):
     """
     Return DataFrame with site metadata for the requested site IDs.
 
     Parameters
     ----------
+    data_source : str
+        Source from which requested data originated. Currently supported: 'usgs_nwis', 'usda_nrcs',
+        'ameriflux'.
+        Source from which requested data originated. Currently supported: 'usgs_nwis', 'usda_nrcs',
+        'ameriflux'.
+    variable : str
+        Description of type of data requested. Currently supported: 'streamflow', 'wtd', 'swe',
+        'precipitation', 'temperature', 'soil moisture', 'latent heat flux', 'sensible heat flux',
+        Description of type of data requested. Currently supported: 'streamflow', 'wtd', 'swe',
+        'precipitation', 'temperature', 'soil moisture', 'latent heat flux', 'sensible heat flux',
+        'shortwave radiation', 'longwave radiation', 'vapor pressure deficit', 'wind speed'.
+    temporal_resolution : str
+        Collection frequency of data requested. Currently supported: 'daily', 'hourly', and 'instantaneous'.
+        Please see the README documentation for allowable combinations with `variable`.
+    aggregation : str
+        Additional information specifying the aggregation method for the variable to be returned.
+        Additional information specifying the aggregation method for the variable to be returned.
+        Options include descriptors such as 'average' and 'total'. Please see the README documentation
+        for allowable combinations with `variable`.
+    args :
+        Optional positional parameters that must be a dict with filter options.
+    kwargs :
+        Supports multiple named parameters with filter option values.
+
+    Optional Parameters
+    --------------------
+    depth_level : int
+        Depth level in inches at which the measurement is taken. Necessary for `variable` = 'soil moisture'.
+    date_start : str; default=None
+        'YYYY-MM-DD' date indicating beginning of time range.
+    date_end : str; default=None
+        'YYYY-MM-DD' date indicating end of time range.
+    latitude_range : tuple; default=None
+        Latitude range bounds for the geographic domain; lesser value is provided first.
+    longitude_range : tuple; default=None
+        Longitude range bounds for the geographic domain; lesser value is provided first.
     site_ids : list; default=None
         List of desired (string) site identifiers.
+    state : str; default=None
+        Two-letter postal code state abbreviation.
+    site_networks: list
+        List of names of site networks. Can be a list with a single network name.
+        Each network must have matching .csv file with a list of site ID values that comprise
+        the network. This .csv file must be located under network_lists/{data_source}/{variable}
+        in the package directory and named as 'network_name'.csv. Eg: `site_networks=['gagesii']`
 
     Returns
     -------
@@ -145,7 +199,11 @@ def get_metadata(data_source, variable, temporal_resolution, aggregation, **kwar
         Site-level DataFrame of site-level metadata.
     """
 
-    options = kwargs
+    if len(args) > 0 and isinstance(args[0], dict):
+        options = args[0]
+    else:
+        options = kwargs
+
     run_remote = not os.path.exists(HYDRODATA)
 
     if run_remote:
@@ -166,7 +224,7 @@ def get_metadata(data_source, variable, temporal_resolution, aggregation, **kwar
     conn = sqlite3.connect(DB_PATH)
 
     metadata_df = _get_sites(
-        conn, data_source, variable, temporal_resolution, aggregation, **kwargs
+        conn, data_source, variable, temporal_resolution, aggregation, *args, **kwargs
     )
 
     # Clean up HUC to string of appropriate length
@@ -607,7 +665,7 @@ def get_registered_api_pin() -> Tuple[str, str]:
         ) from e
 
 
-def _check_inputs(data_source, variable, temporal_resolution, aggregation, **kwargs):
+def _check_inputs(data_source, variable, temporal_resolution, aggregation, *args, **kwargs):
     """
     Checks on inputs to get_observations function.
 
@@ -626,6 +684,13 @@ def _check_inputs(data_source, variable, temporal_resolution, aggregation, **kwa
         Additional information specifying the aggregation method for the variable to be returned. 
         Options include descriptors such as 'average' and 'total'. Please see the README documentation
         for allowable combinations with `variable`.
+    args :
+        Optional positional parameters that must be a dict with filter options.
+    kwargs :
+        Supports multiple named parameters with filter option values.
+
+    Optional Parameters
+    --------------------
     depth_level : int
         Depth level in inches at which the measurement is taken. Necessary for `variable` = 'soil moisture'.
 
@@ -633,6 +698,11 @@ def _check_inputs(data_source, variable, temporal_resolution, aggregation, **kwa
     -------
     None
     """
+    if len(args) > 0 and isinstance(args[0], dict):
+        options = args[0]
+    else:
+        options = kwargs
+
     assert temporal_resolution in ['daily', 'hourly', 'instantaneous']
     assert variable in ['streamflow', 'wtd', 'swe', 'precipitation', 'temperature', 'soil moisture',
                         'latent heat flux', 'sensible heat flux', 'shortwave radiation', 'longwave radiation',
@@ -642,11 +712,11 @@ def _check_inputs(data_source, variable, temporal_resolution, aggregation, **kwa
     assert data_source in ['usgs_nwis', 'usda_nrcs', 'ameriflux']
 
     if variable == 'soil moisture':
-        assert 'depth_level' in kwargs
-        assert kwargs['depth_level'] in [2, 4, 8, 20, 40]
+        assert 'depth_level' in options
+        assert options['depth_level'] in [2, 4, 8, 20, 40]
 
 
-def _get_var_id(conn, data_source, variable, temporal_resolution, aggregation, **kwargs):
+def _get_var_id(conn, data_source, variable, temporal_resolution, aggregation, *args, **kwargs):
     """
     Return mapped var_id.
 
@@ -668,15 +738,27 @@ def _get_var_id(conn, data_source, variable, temporal_resolution, aggregation, *
         Additional information specifying the aggregation method for the variable to be returned. 
         Options include descriptors such as 'average' and 'total'. Please see the README documentation
         for allowable combinations with `variable`.
-    depth_level : int
-        Depth level in inches at which the measurement is taken. Necessary for variable='soil moisture'.
+    args :
+        Optional positional parameters that must be a dict with filter options.
+    kwargs :
+        Supports multiple named parameters with filter option values.
 
+    Optional Parameters
+    --------------------
+    depth_level : int
+        Depth level in inches at which the measurement is taken. Necessary for `variable` = 'soil moisture'.
+ 
     Returns
     -------
     var_id : int
         Integer variable ID associated with combination of `data_source`, `variable`, `temporal_resolution`,
         and `aggregation`.
     """
+    if len(args) > 0 and isinstance(args[0], dict):
+        options = args[0]
+    else:
+        options = kwargs
+
     if variable == 'soil moisture':
         query = """
                 SELECT var_id 
@@ -687,7 +769,7 @@ def _get_var_id(conn, data_source, variable, temporal_resolution, aggregation, *
                     AND aggregation = ?
                     AND depth_level = ?
                 """
-        param_list = [data_source, variable, temporal_resolution, aggregation, kwargs['depth_level']]
+        param_list = [data_source, variable, temporal_resolution, aggregation, options['depth_level']]
 
     else:
         query = """
@@ -751,7 +833,7 @@ def _get_dirpath(var_id):
     return dirpath_map[var_id]
 
 
-def _get_sites(conn, data_source, variable, temporal_resolution, aggregation, **kwargs):
+def _get_sites(conn, data_source, variable, temporal_resolution, aggregation, *args, **kwargs):
     """
     Build DataFrame with site attribute metadata information.
 
@@ -774,21 +856,28 @@ def _get_sites(conn, data_source, variable, temporal_resolution, aggregation, **
         Additional information specifying the aggregation method for the variable to be returned. 
         Options include descriptors such as 'average' and 'total'. Please see the README documentation
         for allowable combinations with `variable`.
-    **depth_level : int
+    args :
+        Optional positional parameters that must be a dict with filter options.
+    kwargs :
+        Supports multiple named parameters with filter option values.
+
+    Optional Parameters
+    --------------------
+    depth_level : int
         Depth level in inches at which the measurement is taken. Necessary for `variable` = 'soil moisture'.
-    **date_start : str; default=None
-        'YYYY-MM-DD' format date indicating beginning of time range.
-    **date_end : str; default=None
-        'YYYY-MM-DD' format date indicating end of time range.
-    **latitude_range : tuple; default=None
+    date_start : str; default=None
+        'YYYY-MM-DD' date indicating beginning of time range.
+    date_end : str; default=None
+        'YYYY-MM-DD' date indicating end of time range.
+    latitude_range : tuple; default=None
         Latitude range bounds for the geographic domain; lesser value is provided first.
-    **longitude_range : tuple; default=None
+    longitude_range : tuple; default=None
         Longitude range bounds for the geographic domain; lesser value is provided first.
-    **site_ids : list; default=None
+    site_ids : list; default=None
         List of desired (string) site identifiers.
-    **state : str; default=None
+    state : str; default=None
         Two-letter postal code state abbreviation.
-    **site_networks: list
+    site_networks: list
         List of names of site networks. Can be a list with a single network name.
         Each network must have matching .csv file with a list of site ID values that comprise
         the network. This .csv file must be located under network_lists/{data_source}/{variable}
@@ -806,60 +895,64 @@ def _get_sites(conn, data_source, variable, temporal_resolution, aggregation, **
     (space and time) are included. The record count does not reflect any filtering 
     at the data/observation level.
     """
+    if len(args) > 0 and isinstance(args[0], dict):
+        options = args[0]
+    else:
+        options = kwargs
 
     # Get associated variable IDs for requested data types and time periods
-    var_id = _get_var_id(conn, data_source, variable, temporal_resolution, aggregation, **kwargs)
+    var_id = _get_var_id(conn, data_source, variable, temporal_resolution, aggregation, *args, **kwargs)
 
     param_list = [var_id]
 
     # Date start
-    if 'date_start' in kwargs and kwargs['date_start'] is not None:
+    if 'date_start' in options and options['date_start'] is not None:
         date_start_query = """ AND last_date_data_available >= ?"""
-        param_list.append(kwargs['date_start'])
+        param_list.append(options['date_start'])
     else:
         date_start_query = """"""
 
     # Date end
-    if 'date_end' in kwargs and kwargs['date_end'] is not None:
+    if 'date_end' in options and options['date_end'] is not None:
         date_end_query = """ AND first_date_data_available <= ?"""
-        param_list.append(kwargs['date_end'])
+        param_list.append(options['date_end'])
     else:
         date_end_query = """"""
 
     # Latitude
-    if 'latitude_range' in kwargs and kwargs['latitude_range'] is not None:
+    if 'latitude_range' in options and options['latitude_range'] is not None:
         lat_query = """ AND latitude BETWEEN ? AND ?"""
-        param_list.append(kwargs['latitude_range'][0])
-        param_list.append(kwargs['latitude_range'][1])
+        param_list.append(options['latitude_range'][0])
+        param_list.append(options['latitude_range'][1])
     else:
         lat_query = """"""
 
     # Longitude
-    if 'longitude_range' in kwargs and kwargs['longitude_range'] is not None:
+    if 'longitude_range' in options and options['longitude_range'] is not None:
         lon_query = """ AND longitude BETWEEN ? AND ?"""
-        param_list.append(kwargs['longitude_range'][0])
-        param_list.append(kwargs['longitude_range'][1])
+        param_list.append(options['longitude_range'][0])
+        param_list.append(options['longitude_range'][1])
     else:
         lon_query = """"""
 
     # Site ID
-    if 'site_ids' in kwargs and kwargs['site_ids'] is not None:
-        site_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(kwargs['site_ids']))
-        for s in kwargs['site_ids']:
+    if 'site_ids' in options and options['site_ids'] is not None:
+        site_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(options['site_ids']))
+        for s in options['site_ids']:
             param_list.append(s)
     else:
         site_query = """"""
 
     # State
-    if 'state' in kwargs and kwargs['state'] is not None:
+    if 'state' in options and options['state'] is not None:
         state_query = """ AND state == ?"""
-        param_list.append(kwargs['state'])
+        param_list.append(options['state'])
     else:
         state_query = """"""
 
     # Site Networks
-    if 'site_networks' in kwargs and kwargs['state'] is not None:
-        network_site_list = _get_network_site_list(data_source, variable, kwargs['site_networks'])
+    if 'site_networks' in options and options['state'] is not None:
+        network_site_list = _get_network_site_list(data_source, variable, options['site_networks'])
         network_query = """ AND s.site_id IN (%s)""" % ','.join('?'*len(network_site_list))
         for s in network_site_list:
             param_list.append(s)
@@ -1020,7 +1113,7 @@ def _filter_min_num_obs(df, min_num_obs):
     return df_filtered
 
 
-def _get_data_nc(site_list, var_id, **kwargs):
+def _get_data_nc(site_list, var_id, *args, **kwargs):
     """
     Get observations data for data that is stored in NetCDF files.
 
@@ -1031,11 +1124,18 @@ def _get_data_nc(site_list, var_id, **kwargs):
     var_id : int
         Integer variable ID associated with combination of `data_source`,
         `variable`, `temporal_resolution`, and `aggregation`.
+    args :
+        Optional positional parameters that must be a dict with filter options.
+    kwargs :
+        Supports multiple named parameters with filter option values.
+
+    Optional Parameters
+    --------------------
     date_start : str; default=None
-        'YYYY-MM-DD' format date indicating beginning of time range.
+        'YYYY-MM-DD' date indicating beginning of time range.
     date_end : str; default=None
-        'YYYY-MM-DD' format date indicating end of time range.
-    min_num_obs : int
+        'YYYY-MM-DD' date indicating end of time range.
+    min_num_obs : int; default=1
         Value for the minimum number of observations desired for a site to have.
 
     Returns
@@ -1044,6 +1144,11 @@ def _get_data_nc(site_list, var_id, **kwargs):
         Stacked observations data for a single variable, filtered to only sites that
         have the minimum number of observations specified.
     """
+    if len(args) > 0 and isinstance(args[0], dict):
+        options = args[0]
+    else:
+        options = kwargs
+
     dirpath = _get_dirpath(var_id)
     file_list = [f'{dirpath}/{site}.nc' for site in site_list]
 
@@ -1057,10 +1162,10 @@ def _get_data_nc(site_list, var_id, **kwargs):
 
     varname = varname_map[str(var_id)]
 
-    if 'date_start' in kwargs:
-        date_start_dt = np.datetime64(kwargs['date_start'])
-    if 'date_end' in kwargs:
-        date_end_dt = np.datetime64(kwargs['date_end'])
+    if 'date_start' in options:
+        date_start_dt = np.datetime64(options['date_start'])
+    if 'date_end' in options:
+        date_end_dt = np.datetime64(options['date_end'])
 
     print('collecting data...')
 
@@ -1077,13 +1182,13 @@ def _get_data_nc(site_list, var_id, **kwargs):
         temp['datetime'] = pd.DatetimeIndex(temp['datetime'].values)
 
         # subset to only observations within desired time range
-        if ('date_start' not in kwargs) and ('date_end' not in kwargs):
+        if ('date_start' not in options) and ('date_end' not in options):
             temp_wy = temp
-        elif ('date_start' not in kwargs) and ('date_end' in kwargs):
+        elif ('date_start' not in options) and ('date_end' in options):
             temp_wy = temp.sel(datetime=(temp.datetime <= date_end_dt))
-        elif ('date_start' in kwargs) and ('date_end' not in kwargs):
+        elif ('date_start' in options) and ('date_end' not in options):
             temp_wy = temp.sel(datetime=(temp.datetime >= date_start_dt))
-        elif ('date_start' in kwargs) and ('date_end' in kwargs):
+        elif ('date_start' in options) and ('date_end' in options):
             temp_wy = temp.sel(datetime=(temp.datetime >= date_start_dt) & (temp.datetime <= date_end_dt))
 
         if i == 0:
@@ -1100,13 +1205,13 @@ def _get_data_nc(site_list, var_id, **kwargs):
     print('data collected.')
 
     data_df = _convert_to_pandas(ds)
-    if 'min_num_obs' in kwargs and kwargs['min_num_obs'] is not None:
-        return _filter_min_num_obs(data_df, kwargs['min_num_obs'])
+    if 'min_num_obs' in options and options['min_num_obs'] is not None:
+        return _filter_min_num_obs(data_df, options['min_num_obs'])
     else:
         return data_df
 
 
-def _get_data_sql(conn, var_id, **kwargs):
+def _get_data_sql(conn, var_id, *args, **kwargs):
     """
     Get observations data for data that is stored in a SQL table.
 
@@ -1118,11 +1223,18 @@ def _get_data_sql(conn, var_id, **kwargs):
     var_id : int
         Integer variable ID associated with combination of `data_source`, 
         `variable`, `temporal_resolution`, and `aggregation`.
+    args :
+        Optional positional parameters that must be a dict with filter options.
+    kwargs :
+        Supports multiple named parameters with filter option values.
+
+    Optional Parameters
+    --------------------
     date_start : str; default=None
-        'YYYY-MM-DD' format date indicating beginning of time range.
+        'YYYY-MM-DD' date indicating beginning of time range.
     date_end : str; default=None
-        'YYYY-MM-DD' format date indicating end of time range.
-    min_num_obs : int
+        'YYYY-MM-DD' date indicating end of time range.
+    min_num_obs : int; default=1
         Value for the minimum number of observations desired for a site to have.
 
     Returns
@@ -1133,27 +1245,32 @@ def _get_data_sql(conn, var_id, **kwargs):
     """
     assert var_id == 5
 
+    if len(args) > 0 and isinstance(args[0], dict):
+        options = args[0]
+    else:
+        options = kwargs
+
     # Note:
     #   pumping_status == '1' --> Static (not pumping)
     #   pumping_status == 'P' --> Pumping
     #   pumping_status == '' --> unknown (not reported)
-    if 'min_num_obs' not in kwargs or kwargs['min_num_obs'] is None:
+    if 'min_num_obs' not in options or options['min_num_obs'] is None:
         min_num_obs = 1
     else:
-        min_num_obs = kwargs['min_num_obs']
+        min_num_obs = options['min_num_obs']
 
-    if ('date_start' not in kwargs) and ('date_end' not in kwargs):
+    if ('date_start' not in options) and ('date_end' not in options):
         date_query = """"""
         param_list = [min_num_obs]
-    elif ('date_start' not in kwargs) and ('date_end' in kwargs):
+    elif ('date_start' not in options) and ('date_end' in options):
         date_query = """ WHERE w.date <= ?"""
-        param_list = [kwargs['date_end'], min_num_obs, kwargs['date_end']]
-    elif ('date_start' in kwargs) and ('date_end' not in kwargs):
+        param_list = [options['date_end'], min_num_obs, options['date_end']]
+    elif ('date_start' in options) and ('date_end' not in options):
         date_query = """ WHERE w.date >= ?"""
-        param_list = [kwargs['date_start'], min_num_obs, kwargs['date_start']]
-    elif ('date_start' in kwargs) and ('date_end' in kwargs):
+        param_list = [options['date_start'], min_num_obs, options['date_start']]
+    elif ('date_start' in options) and ('date_end' in options):
         date_query = """ WHERE w.date >= ? AND w.date <= ?"""
-        param_list = [kwargs['date_start'], kwargs['date_end'], min_num_obs, kwargs['date_start'], kwargs['date_end']]
+        param_list = [options['date_start'], options['date_end'], min_num_obs, options['date_start'], options['date_end']]
 
     query = """
             SELECT w.site_id, w.date, w.wtd, w.pumping_status
