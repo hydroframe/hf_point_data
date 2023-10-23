@@ -99,7 +99,8 @@ def mock_requests_get_metadata(point_data_url, headers, timeout=180):
 
 
 def test_get_dataframe():
-    """Test ability to retreive vegp file."""
+    """Test code that allows api to access metadata remotely, with api
+    calls mocked out."""
 
     with mock.patch(
         "requests.get",
@@ -121,7 +122,8 @@ def test_get_dataframe():
 
 
 def test_get_meta_dataframe():
-    """Test ability to retreive vegp file."""
+    """Test code that allows api to access metadata remotely, with api
+    calls mocked out."""
 
     with mock.patch(
         "requests.get",
