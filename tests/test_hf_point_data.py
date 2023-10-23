@@ -235,6 +235,7 @@ def test_get_data_streamflow_daily():
     assert len(df) == 5
     assert '01011000' in df.columns
 
+
 def test_get_data_streamflow_daily_dict():
     """Test for daily streamflow data using input dictionary"""
     df = hf_point_data.get_data(
@@ -243,12 +244,13 @@ def test_get_data_streamflow_daily_dict():
         "daily",
         "average",
         {"date_start": "2002-01-01",
-        "date_end": "2002-01-05",
-        "latitude_range": (47, 50),
-        "longitude_range": (-75, -50)}
+         "date_end": "2002-01-05",
+         "latitude_range": (47, 50),
+         "longitude_range": (-75, -50)}
     )
     assert len(df) == 5
     assert '01011000' in df.columns
+
 
 def test_get_data_streamflow_hourly():
     """Test for hourly streamflow data"""
@@ -637,6 +639,7 @@ def test_get_metadata_streamflow():
     assert len(metadata_df.columns) == 23
     assert '01011000' in list(metadata_df['site_id'])
 
+
 def test_get_metadata_streamflow_dict():
     """Test for streamflow metadata using dictionary input"""
     metadata_df = hf_point_data.get_metadata(
@@ -645,13 +648,31 @@ def test_get_metadata_streamflow_dict():
         "daily",
         "average",
         {"date_start": "2002-01-01",
-        "date_end": "2002-01-05",
-        "latitude_range": (47, 50),
-        "longitude_range": (-75, -50)}
+         "date_end": "2002-01-05",
+         "latitude_range": (47, 50),
+         "longitude_range": (-75, -50)}
     )
     assert len(metadata_df) == 4
     assert len(metadata_df.columns) == 23
     assert '01011000' in list(metadata_df['site_id'])
+
+
+def test_get_metadata_streamflow_hourly():
+    """Test for streamflow metadata, hourly"""
+    metadata_df = hf_point_data.get_metadata(
+        "usgs_nwis",
+        "streamflow",
+        "hourly",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        latitude_range=(47, 50),
+        longitude_range=(-75, -50)
+    )
+    assert len(metadata_df) == 4
+    assert len(metadata_df.columns) == 23
+    assert '01011000' in list(metadata_df['site_id'])
+
 
 def test_get_metadata_wtd():
     """Test for wtd metadata"""
@@ -804,6 +825,17 @@ def test_get_data_min_num_obs_filter():
         site_ids=['01377500', '01378500', '01445000']
     )
     assert list(df.columns) == ['date', '01377500', '01378500', '01445000']
+
+
+def test_get_citations():
+    """Test for get_citations function with return DataFrame."""
+    doi_df = hf_point_data.get_citations(data_source='ameriflux', variable='latent heat flux',
+                                         temporal_resolution='hourly', aggregation='total',
+                                         site_ids=['US-Act', 'US-Bar'])
+
+    assert doi_df.shape == (2, 2)
+    assert 'site_id' in doi_df.columns
+    assert 'doi' in doi_df.columns
 
 
 if __name__ == "__main__":
