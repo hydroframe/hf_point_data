@@ -651,6 +651,22 @@ def test_get_metadata_streamflow_dict():
     assert len(metadata_df.columns) == 23
     assert '01011000' in list(metadata_df['site_id'])
 
+def test_get_metadata_streamflow_hourly():
+    """Test for streamflow metadata, hourly"""
+    metadata_df = hf_point_data.get_metadata(
+        "usgs_nwis",
+        "streamflow",
+        "hourly",
+        "average",
+        date_start="2002-01-01",
+        date_end="2002-01-05",
+        latitude_range=(47, 50),
+        longitude_range=(-75, -50)
+    )
+    assert len(metadata_df) == 4
+    assert len(metadata_df.columns) == 23
+    assert '01011000' in list(metadata_df['site_id'])
+
 def test_get_metadata_wtd():
     """Test for wtd metadata"""
     metadata_df = hf_point_data.get_metadata(
