@@ -703,17 +703,35 @@ def _check_inputs(data_source, variable, temporal_resolution, aggregation, *args
     else:
         options = kwargs
 
-    assert temporal_resolution in ['daily', 'hourly', 'instantaneous']
-    assert variable in ['streamflow', 'wtd', 'swe', 'precipitation', 'temperature', 'soil moisture',
+    try:
+        assert temporal_resolution in ['daily', 'hourly', 'instantaneous']
+    except:
+        raise ValueError("The provided temporal_resolution is currently unsupported. Please see the documentation for allowed values.")
+    
+    try:
+        assert variable in ['streamflow', 'wtd', 'swe', 'precipitation', 'temperature', 'soil moisture',
                         'latent heat flux', 'sensible heat flux', 'shortwave radiation', 'longwave radiation',
                         'vapor pressure deficit', 'wind speed']
-    assert aggregation in ['average', 'instantaneous', 'total', 'total, snow-adjusted',
+    except:
+        raise ValueError("The provided variable is currently unsupported. Please see the documentation for allowed values.")
+    
+    try:
+        assert aggregation in ['average', 'instantaneous', 'total', 'total, snow-adjusted',
                            'start-of-day', 'accumulated', 'minimum', 'maximum']
-    assert data_source in ['usgs_nwis', 'usda_nrcs', 'ameriflux']
+    except:
+        raise ValueError("The provided aggregation is currently unsupported. Please see the documentation for allowed values.")
+    
+    try:
+        assert data_source in ['usgs_nwis', 'usda_nrcs', 'ameriflux']
+    except:
+        raise ValueError("The provided data_source is currently unsupported. Please see the documentation for allowed values.")
 
     if variable == 'soil moisture':
-        assert 'depth_level' in options
-        assert options['depth_level'] in [2, 4, 8, 20, 40]
+        try:
+            assert 'depth_level' in options
+            assert options['depth_level'] in [2, 4, 8, 20, 40]
+        except: 
+            raise ValueError("Please provide depth_level with one of the supported values. Please see the documentation for allowed values.")
 
 
 def _get_var_id(conn, data_source, variable, temporal_resolution, aggregation, *args, **kwargs):
