@@ -18,6 +18,7 @@ DB_PATH = f"{HYDRODATA}/national_obs/point_obs.sqlite"
 HYDRODATA_URL = os.getenv("HYDRODATA_URL", "https://hydro-dev-aj.princeton.edu")
 NETWORK_LISTS_PATH = f"/{HYDRODATA}/national_obs/tools/network_lists"
 
+
 def get_data(data_source, variable, temporal_resolution, aggregation, *args, **kwargs):
     """
     Collect observations data into a Pandas DataFrame.
@@ -498,15 +499,31 @@ def _construct_string_from_qparams(
     return result_string
 
 
-def get_citations(data_source, site_ids=None):
+def get_citations(data_source, variable, temporal_resolution, aggregation, site_ids=None):
     """
-    Print and/or return specific citation information for requested data source.
+    Print and/or return specific citation information.
 
     Parameters
     ----------
     data_source : str
-        Source from which data originates. Options include: 'usgs_nwis', 'usda_nrcs', and
+        Source from which requested data originated. Currently supported: 'usgs_nwis', 'usda_nrcs',
         'ameriflux'.
+        Source from which requested data originated. Currently supported: 'usgs_nwis', 'usda_nrcs',
+        'ameriflux'.
+    variable : str
+        Description of type of data requested. Currently supported: 'streamflow', 'wtd', 'swe',
+        'precipitation', 'temperature', 'soil moisture', 'latent heat flux', 'sensible heat flux',
+        Description of type of data requested. Currently supported: 'streamflow', 'wtd', 'swe',
+        'precipitation', 'temperature', 'soil moisture', 'latent heat flux', 'sensible heat flux',
+        'shortwave radiation', 'longwave radiation', 'vapor pressure deficit', 'wind speed'.
+    temporal_resolution : str
+        Collection frequency of data requested. Currently supported: 'daily', 'hourly', and 'instantaneous'.
+        Please see the README documentation for allowable combinations with `variable`.
+    aggregation : str
+        Additional information specifying the aggregation method for the variable to be returned.
+        Additional information specifying the aggregation method for the variable to be returned.
+        Options include descriptors such as 'average' and 'total'. Please see the README documentation
+        for allowable combinations with `variable`.
     site_ids : list; default None
         If provided, the specific list of sites to return data DOIs for. This is only
         supported if `data_source` == 'ameriflux'.
@@ -559,20 +576,9 @@ def get_citations(data_source, site_ids=None):
                 Source: https://ameriflux.lbl.gov/data/data-policy/"""
         )
 
-    if site_ids is not None:
-        # Create database connection
-        conn = sqlite3.connect(DB_PATH)
-
-        query = """
-                SELECT site_id, doi 
-                FROM sites
-                WHERE site_id IN (%s)
-                """ % ",".join(
-            "?" * len(site_ids)
-        )
-
-        df = pd.read_sql_query(query, conn, params=site_ids)
-        return df
+        if site_ids is not None:
+            metadata_df = get_metadata(data_source, variable, temporal_resolution, aggregation, site_ids=site_ids)
+        return metadata_df[['site_id', 'doi']]
 
 
 def _convert_params_to_string_dict(options):
@@ -706,32 +712,36 @@ def _check_inputs(data_source, variable, temporal_resolution, aggregation, *args
     try:
         assert temporal_resolution in ['daily', 'hourly', 'instantaneous']
     except:
-        raise ValueError("The provided temporal_resolution is currently unsupported. Please see the documentation for allowed values.")
-    
+        raise ValueError(
+            f"Unexpected value for temporal_resolution, {temporal_resolution}. Please see the documentation for allowed values.")
+
     try:
         assert variable in ['streamflow', 'wtd', 'swe', 'precipitation', 'temperature', 'soil moisture',
-                        'latent heat flux', 'sensible heat flux', 'shortwave radiation', 'longwave radiation',
-                        'vapor pressure deficit', 'wind speed']
+                            'latent heat flux', 'sensible heat flux', 'shortwave radiation', 'longwave radiation',
+                            'vapor pressure deficit', 'wind speed']
     except:
-        raise ValueError("The provided variable is currently unsupported. Please see the documentation for allowed values.")
-    
+        raise ValueError(f"Unexpected value for variable, {variable}. Please see the documentation for allowed values.")
+
     try:
         assert aggregation in ['average', 'instantaneous', 'total', 'total, snow-adjusted',
-                           'start-of-day', 'accumulated', 'minimum', 'maximum']
+                               'start-of-day', 'accumulated', 'minimum', 'maximum']
     except:
-        raise ValueError("The provided aggregation is currently unsupported. Please see the documentation for allowed values.")
-    
+        raise ValueError(
+            f"Unexpected value for aggregation, {aggregation}. Please see the documentation for allowed values.")
+
     try:
         assert data_source in ['usgs_nwis', 'usda_nrcs', 'ameriflux']
     except:
-        raise ValueError("The provided data_source is currently unsupported. Please see the documentation for allowed values.")
+        raise ValueError(
+            f"Unexpected value for data_source, {data_source} Please see the documentation for allowed values.")
 
     if variable == 'soil moisture':
         try:
             assert 'depth_level' in options
             assert options['depth_level'] in [2, 4, 8, 20, 40]
-        except: 
-            raise ValueError("Please provide depth_level with one of the supported values. Please see the documentation for allowed values.")
+        except:
+            raise ValueError(
+                "Please provide depth_level with one of the supported values. Please see the documentation for allowed values.")
 
 
 def _get_var_id(conn, data_source, variable, temporal_resolution, aggregation, *args, **kwargs):
@@ -765,7 +775,7 @@ def _get_var_id(conn, data_source, variable, temporal_resolution, aggregation, *
     --------------------
     depth_level : int
         Depth level in inches at which the measurement is taken. Necessary for `variable` = 'soil moisture'.
- 
+
     Returns
     -------
     var_id : int
@@ -1288,7 +1298,11 @@ def _get_data_sql(conn, var_id, *args, **kwargs):
         param_list = [options['date_start'], min_num_obs, options['date_start']]
     elif ('date_start' in options) and ('date_end' in options):
         date_query = """ WHERE w.date >= ? AND w.date <= ?"""
-        param_list = [options['date_start'], options['date_end'], min_num_obs, options['date_start'], options['date_end']]
+        param_list = [
+            options['date_start'],
+            options['date_end'],
+            min_num_obs, options['date_start'],
+            options['date_end']]
 
     query = """
             SELECT w.site_id, w.date, w.wtd, w.pumping_status
